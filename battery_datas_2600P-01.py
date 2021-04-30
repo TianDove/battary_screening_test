@@ -115,7 +115,6 @@ class Data_Pre_Processor(object):
         self.current_data_ID = ''
         self.current_cell_ID = ''
         self.number_of_cell_in_a_tray = 256
-        self.cells_dataframe = pandas.DataFrame()  # 所有电池数据
         # 私有属性（）
 
     def data_process_static_and_dynamic(self):
@@ -123,62 +122,77 @@ class Data_Pre_Processor(object):
         # 不同类型数据文件夹路径(静态，动态)
         dynamic_fold_path = os.path.join(self.organized_fold_path, self.data_type[0])
         static_fold_path = os.path.join(self.organized_fold_path, self.data_type[1])
-
         temp_cells_dic = {}
-        temp_cell_dic = {'static parameters': pandas.Series(),
-                         'dynamic parameters': pandas.DataFrame()
-                         }
-        temp_dynamic_parameter_dic = {'1-charge': pandas.DataFrame(),
-                                      '2-charge': pandas.DataFrame(),
-                                      '3-charge': pandas.DataFrame(),
-                                      '4-discharge': pandas.DataFrame(),
-                                      '5-charge': pandas.DataFrame(),
-                                      }
-        temp_data_dic = {'time(min)': pandas.Series(),
-                         'voltage(V)': pandas.Series(),
-                         'current(mA)': pandas.Series(),
-                         'capacity(mAh)': pandas.Series()
+        temp_cell_dic = {'static parameters': '',
+                         'dynamic parameters': ''
                          }
         # 不同批次动态和静态数据文件夹路径
         dynamic_batch_list = os.listdir(dynamic_fold_path)
         for batch in dynamic_batch_list:
             self.current_batch_ID = batch
+            print('Current Batch: {}'.format(self.current_batch_ID))
+            # 读取一个批次内电池静态数据
             static_data_in_current_batch_path = os.path.join(static_fold_path, batch + '.csv')
             static_data_in_current_batch = pandas.read_csv(static_data_in_current_batch_path, low_memory=False)
+
             dynamic_data_current_batch_fold_path = os.path.join(dynamic_fold_path, self.current_batch_ID)
             dynamic_data_tray_list_in_current_batch = os.listdir(dynamic_data_current_batch_fold_path)
             for tray in dynamic_data_tray_list_in_current_batch:
                 self.current_tray_ID = 'C0000' + tray
+                print('Current Tray: {}'.format(self.current_tray_ID))
                 dynamic_data_current_tray_fold_path = os.path.join(dynamic_data_current_batch_fold_path, tray)
                 dynamic_data_file_list_in_current_tray = os.listdir(dynamic_data_current_tray_fold_path)
+                # 选取一个货架内电池静态数据
                 current_tray_static_data = static_data_in_current_batch[static_data_in_current_batch['Tray ID'] == self.current_tray_ID]
-                for data in dynamic_data_file_list_in_current_tray:
-                    self.current_data_ID = data[6]
-                    dynamic_data_current_data_path = os.path.join(dynamic_data_current_tray_fold_path, data)
-                    dynamic_data_in_current_tray = pandas.read_csv(dynamic_data_current_data_path, low_memory=False)
-                    dynamic_data_time_in_current_tray = dynamic_data_in_current_tray.iloc[:, 1]
-                    voltage_index_range = numpy.arange(2, self.number_of_cell_in_a_tray + 2, dtype='int32').tolist()
-                    for cell in voltage_index_range:
-                        static_idx = cell - 2
-                        cell_static = current_tray_static_data.iloc[static_idx, :]
+                voltage_index_range = numpy.arange(2, self.number_of_cell_in_a_tray + 2, dtype='int32')
+                voltage_index_list = voltage_index_range.tolist()
+                for cell in voltage_index_list:
+                    static_idx = cell - 2
+                    cell_static = current_tray_static_data.iloc[static_idx, :]
+                    temp_dynamic_parameter_dic = {'1-charge': '',
+                                                  '2-charge': '',
+                                                  '3-charge': '',
+                                                  '4-discharge': '',
+                                                  '5-charge': '',
+                                                  }
+                    temp_dynamic_parameter_dic_key_list = list(temp_dynamic_parameter_dic.keys())
+                    for data in dynamic_data_file_list_in_current_tray:
+
+                        temp_data_dic = {'time(min)': pandas.Series(dtype='float64'),
+                                         'voltage(V)': pandas.Series(dtype='float64'),
+                                         'current(mA)': pandas.Series(dtype='float64'),
+                                         'capacity(mAh)': pandas.Series(dtype='float64')
+                                         }
+                        self.current_data_ID = data[6]
+                        dynamic_data_current_data_path = os.path.join(dynamic_data_current_tray_fold_path, data)
+                        dynamic_data_in_current_tray = pandas.read_csv(dynamic_data_current_data_path, low_memory=False)
+                        time = dynamic_data_in_current_tray.iloc[:, 1]
 
                         voltage_idx = cell
                         cell_voltage = dynamic_data_in_current_tray.iloc[:, voltage_idx]
 
-                        currnet_idx = voltage_idx + self.number_of_cell_in_a_tray
-                        cell_current = dynamic_data_in_current_tray.iloc[:, currnet_idx]
+                        current_idx = voltage_idx + self.number_of_cell_in_a_tray
+                        cell_current = dynamic_data_in_current_tray.iloc[:, current_idx]
 
-                        capacity_idx = currnet_idx + self.number_of_cell_in_a_tray
+                        capacity_idx = current_idx + self.number_of_cell_in_a_tray
                         cell_capacity = dynamic_data_in_current_tray.iloc[:, capacity_idx]
 
-                        temp_data_dic['time(min)'] = dynamic_data_time_in_current_tray
+                        temp_data_dic['time(min)'] = time
                         temp_data_dic['voltage(V)'] = cell_voltage
                         temp_data_dic['current(mA)'] = cell_current
                         temp_data_dic['capacity(mAh)'] = cell_capacity
+                        temp_dynamic_parameter_dic[temp_dynamic_parameter_dic_key_list[int(self.current_data_ID) - 1]] = temp_data_dic
 
-                        if self.current_data_ID == 1:
-                            temp_dynamic_parameter_dic['1-charge'] = temp_data_dic
-                    return 0
+                    temp_cell_dic['static parameters'] = cell_static
+                    temp_cell_dic['dynamic parameters'] = temp_dynamic_parameter_dic
+                    cell_name = self.current_batch_ID + '_' + self.current_tray_ID + '_' + str(static_idx + 1)
+                    temp_cells_dic.update({cell_name: temp_cell_dic})
+                    print('Current Cell: {}'.format(cell_name))
+                    current_progress_in_tray = ((static_idx + 1) / self.number_of_cell_in_a_tray) * 100
+                    print('Progress of a Tray: {} %'.format(current_progress_in_tray))
+                cells_DataFrame = pandas.DataFrame.from_dict(temp_cells_dic, orient='index', columns=['static parameters', 'dynamic parameters'])
+                cells_DataFrame.to_csv(self.organized_fold_path + '\\cells_DataFrame.csv')
+        return 0
 
 
 # test
