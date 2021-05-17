@@ -65,7 +65,8 @@ class File_Organizer(object):
                         target_data_path = os.path.join(target_tray_fold_path, target_data_name)
                         if not os.path.exists(target_data_path):
                             source_data_csv_file.to_csv(target_data_path)
-                            print('Source:{} -- Target:{} organized success.'.format(source_data_name, target_data_name))
+                            print('Source:{} -- Target:{} organized success.'
+                                  .format(source_data_name, target_data_name))
                         else:
                             print('File: \" {} \" already exists.'.format(target_data_path))
         return 0
@@ -123,9 +124,6 @@ class Data_Pre_Processor(object):
         dynamic_fold_path = os.path.join(self.organized_fold_path, self.data_type[0])
         static_fold_path = os.path.join(self.organized_fold_path, self.data_type[1])
         temp_cells_dic = {}
-        temp_cell_dic = {'static parameters': '',
-                         'dynamic parameters': ''
-                         }
         # 不同批次动态和静态数据文件夹路径
         dynamic_batch_list = os.listdir(dynamic_fold_path)
         for batch in dynamic_batch_list:
@@ -143,12 +141,23 @@ class Data_Pre_Processor(object):
                 dynamic_data_current_tray_fold_path = os.path.join(dynamic_data_current_batch_fold_path, tray)
                 dynamic_data_file_list_in_current_tray = os.listdir(dynamic_data_current_tray_fold_path)
                 # 选取一个货架内电池静态数据
-                current_tray_static_data = static_data_in_current_batch[static_data_in_current_batch['Tray ID'] == self.current_tray_ID]
+                current_tray_static_data = static_data_in_current_batch[static_data_in_current_batch['Tray ID'] ==
+                                                                        self.current_tray_ID]
                 voltage_index_range = numpy.arange(2, self.number_of_cell_in_a_tray + 2, dtype='int32')
                 voltage_index_list = voltage_index_range.tolist()
                 for cell in voltage_index_list:
+
                     static_idx = cell - 2
                     cell_static = current_tray_static_data.iloc[static_idx, :]
+
+                    cell_name = self.current_batch_ID + '_' + self.current_tray_ID + '_' + str(static_idx + 1)
+                    cell_data_path = os.path.join(self.organized_fold_path, 'cells', cell_name)
+                    if not os.path.exists(cell_data_path):
+                        os.mkdir(cell_data_path)
+                        print('Fold: \" {} \" created success.'.format(cell_data_path))
+                    else:
+                        print('Fold: \" {} \" already exists.'.format(cell_data_path))
+
                     temp_dynamic_parameter_dic = {'1-charge': '',
                                                   '2-charge': '',
                                                   '3-charge': '',
@@ -181,17 +190,25 @@ class Data_Pre_Processor(object):
                         temp_data_dic['voltage(V)'] = cell_voltage
                         temp_data_dic['current(mA)'] = cell_current
                         temp_data_dic['capacity(mAh)'] = cell_capacity
-                        temp_dynamic_parameter_dic[temp_dynamic_parameter_dic_key_list[int(self.current_data_ID) - 1]] = temp_data_dic
+                        # temp_dynamic_parameter_dic[temp_dynamic_parameter_dic_key_list[int(self.current_data_ID) - 1]]
+                        # = temp_data_dic
 
-                    temp_cell_dic['static parameters'] = cell_static
-                    temp_cell_dic['dynamic parameters'] = temp_dynamic_parameter_dic
-                    cell_name = self.current_batch_ID + '_' + self.current_tray_ID + '_' + str(static_idx + 1)
-                    temp_cells_dic.update({cell_name: temp_cell_dic})
+                        dynamic_data_file_name = os.path.join(cell_data_path, temp_dynamic_parameter_dic_key_list[int(self.current_data_ID) - 1] + '.csv')
+                        temp_dynamic_dataframe = pandas.DataFrame.from_dict(temp_data_dic)
+                        temp_dynamic_dataframe.to_csv(dynamic_data_file_name)
+
+                    static_data_file_name = os.path.join(cell_data_path, 'static_data.csv')
+                    cell_static.to_csv(static_data_file_name)
+
+                    # temp_cell_dic['dynamic parameters'] = temp_dynamic_parameter_dic
+                    # temp_cell_dic['static parameters'] = cell_static
+                    # temp_cells_dic.update({cell_name: temp_cell_dic})
+
                     print('Current Cell: {}'.format(cell_name))
                     current_progress_in_tray = ((static_idx + 1) / self.number_of_cell_in_a_tray) * 100
                     print('Progress of a Tray: {} %'.format(current_progress_in_tray))
-                cells_DataFrame = pandas.DataFrame.from_dict(temp_cells_dic, orient='index', columns=['static parameters', 'dynamic parameters'])
-                cells_DataFrame.to_csv(self.organized_fold_path + '\\cells_DataFrame.csv')
+                cells_dataframe = pandas.DataFrame.from_dict(temp_cells_dic, orient='index', columns=['static parameters', 'dynamic parameters'])
+                cells_dataframe.to_csv(self.organized_fold_path + '\\cells_dataframe.csv')
         return 0
 
 
@@ -203,10 +220,9 @@ m_data_fold = os.path.join(os.getcwd(), 'data')
 m_raw_data_fold_path = os.path.join(m_data_fold, m_raw_data_fold)
 m_organized_data_fold_path = os.path.join(m_data_fold, m_organized_data_fold)
 
-#m_file_organizer = File_Organizer(m_raw_data_fold_path)
-#m_file_organizer.static_organizer_file()
-#m_file_organizer.dynamic_organizer_file()
+# m_file_organizer = File_Organizer(m_raw_data_fold_path)
+# m_file_organizer.static_organizer_file()
+# m_file_organizer.dynamic_organizer_file()
 
 m_data_pre_processor = Data_Pre_Processor(m_organized_data_fold_path)
 m_data_pre_processor.data_process_static_and_dynamic()
-
