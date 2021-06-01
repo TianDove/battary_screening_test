@@ -1,228 +1,351 @@
-"""
-battery_data_2600P-01
-"""
-
-
+#!/usr/bin/env python
+# -*- coding:utf-8 -*-
+# Author: Wang, Xiang
+""""""
 import os
-import pandas
-import numpy
+import sys
+import functional
+import pandas as pd
+from tqdm import tqdm
 
 
-class File_Organizer(object):
+class File_Organizer():
     """"""
-
-    def __init__(self, unsorted_path):
-        # 公开属性
-        self.unsorted_data_fold_path = unsorted_path
-        self.organized_data_fold_path = os.path.join(os.path.dirname(unsorted_path), '2600P-01-organized')
-        self.data_type = ('dynamic', 'static')
-
-        # 私有属性（）
-
-    def dynamic_organizer_file(self):
+    def __init__(self, fold_path, fold_name):
         """"""
-        dynamic_fold_path = os.path.join(self.unsorted_data_fold_path, self.data_type[0])
-        target_dynamic_fold_path = os.path.join(self.organized_data_fold_path, self.data_type[0])
-        dynamic_batch_fold_list = os.listdir(dynamic_fold_path)
+        self.fold_path = fold_path
+        self.fold_name = fold_name
+        self.cell_fold_name = '2600P-01_DataSet'
+        self.num_of_cell_in_tray = 256
+        self.output_fold_path = os.path.join(self.fold_path, self.cell_fold_name)
+        self.input_fold_path = os.path.join(self.fold_path, self.fold_name)
+        self.curr_batch = ''
+        self.curr_tray = ''
+        self.curr_cell = ''
+        self.curr_para = ''
+        self.cell_ver_err_dic = {}
+        self.voltage_index = [x for x in range(1, self.num_of_cell_in_tray + 1)]
+        self.current_index = [x for x in range(self.num_of_cell_in_tray + 1, self.num_of_cell_in_tray*2 + 1)]
+        self.capacity_index = [x for x in range(self.num_of_cell_in_tray*2 + 1, self.num_of_cell_in_tray*3 + 1)]
+        self.write_flag = False
 
-        if not os.path.exists(target_dynamic_fold_path):
-            os.mkdir(target_dynamic_fold_path)
-            print('Fold: \" {} \" created success.'.format(target_dynamic_fold_path))
+    def make_file_dir(self):
+        """"""
+        if not os.path.exists(self.input_fold_path):
+            print(f'Path Not Exist:{self.input_fold_path}.')
+            sys.exit(0)
+        if not os.path.exists(self.output_fold_path):
+            os.mkdir(self.output_fold_path)
+            os.mkdir(self.output_fold_path + '\\xlsx')
+            os.mkdir(self.output_fold_path + '\\pickle')
+            print(f'Make Dir:{self.output_fold_path}.')
+            return True
         else:
-            print('Fold: \" {} \" already exists.'.format(target_dynamic_fold_path))
+            print(f'Path Exist:{self.output_fold_path}.')
+            sys.exit(0)
 
-        for batch_fold_name in dynamic_batch_fold_list:
-            target_batch_fold_path = os.path.join(target_dynamic_fold_path, batch_fold_name)
-            if not os.path.exists(target_batch_fold_path):
-                os.mkdir(target_batch_fold_path)
-                print('Fold: \" {} \" created success.'.format(target_batch_fold_path))
-            else:
-                print('Fold: \" {} \" already exists.'.format(target_batch_fold_path))
-
-            dynamic_tray_path = os.path.join(dynamic_fold_path, batch_fold_name)
-            dynamic_tray_fold_list = os.listdir(dynamic_tray_path)
-            for tray_fold_name in dynamic_tray_fold_list:
-                if len(tray_fold_name) <= 4:
-                    target_tray_fold_name = '0' * (5-len(tray_fold_name)) + tray_fold_name
-                else:
-                    target_tray_fold_name = tray_fold_name
-                target_tray_fold_path = os.path.join(target_batch_fold_path, target_tray_fold_name)
-                if not os.path.exists(target_tray_fold_path):
-                    os.mkdir(target_tray_fold_path)
-                    print('Fold: \" {} \" created success.'.format(target_tray_fold_path))
-                else:
-                    print('Fold: \" {} \" already exists.'.format(target_tray_fold_path))
-                dynamic_data_path = os.path.join(dynamic_tray_path, tray_fold_name)
-                dynamic_data_list = os.listdir(dynamic_data_path)
-                for data_name in dynamic_data_list:
-                    source_data_name = data_name
-                    source_data_name_split = os.path.splitext(source_data_name)
-                    source_data_path = os.path.join(dynamic_data_path, source_data_name)
-                    source_data_csv_file = pandas.read_csv(source_data_path)
-                    if len(source_data_name_split[0]) <= 6:
-                        target_data_name = '0' * (7 - len(source_data_name_split[0])) + source_data_name_split[0] + \
-                                                   source_data_name_split[1]
-                        target_data_path = os.path.join(target_tray_fold_path, target_data_name)
-                        if not os.path.exists(target_data_path):
-                            source_data_csv_file.to_csv(target_data_path)
-                            print('Source:{} -- Target:{} organized success.'
-                                  .format(source_data_name, target_data_name))
-                        else:
-                            print('File: \" {} \" already exists.'.format(target_data_path))
-        return 0
-
-    def static_organizer_file(self):
+    def tray_name_adjust(self, tray):
         """"""
-        static_data_path = os.path.join(self.unsorted_data_fold_path, self.data_type[1])
-        static_data_name_list = os.listdir(static_data_path)
-        source_file_path = static_data_path
-        target_file_path = os.path.join(self.organized_data_fold_path, self.data_type[1])
-
-        if not os.path.exists(target_file_path):
-            os.mkdir(target_file_path)
-            print('Fold: \" {} \" created success.'.format(target_file_path))
+        tray = tray.strip('-')
+        non_zero_str = ''
+        if len(tray) > 0:
+            len_of_tray_id = len('C000009429')
+            for i, num in enumerate(iter(tray)):
+                if num != '0':
+                    non_zero_str = tray[i:]
+                    break
+            pad_num = len_of_tray_id - len(non_zero_str) - 1
+            new_tray = 'C' + '0' * pad_num + non_zero_str
+            return new_tray
         else:
-            print('Fold: \" {} \" already exists.'.format(target_file_path))
+            print('Current Tray ID Empty.')
+            sys.exit(0)
 
-        for static_file_name in static_data_name_list:
-            source = os.path.join(source_file_path, static_file_name)
-            source_name = os.path.basename(source)
-            target_name = os.path.splitext(source_name)[0] + '.csv'
-            target = os.path.join(target_file_path, target_name)
-            if not os.path.exists(target):
-                self.xlsx_to_csv(source, target)
-                print('File: \" {} \" organized success.'.format(target))
+    def parameter_name_adjust(self, para):
+        """"""
+        para_name_list = os.path.splitext(para)
+        while para_name_list[-1] != '':
+            para_name_list = os.path.splitext(para_name_list[0])
+        para_name = para_name_list[0]
+        new_para_name = ''
+        if len(para_name) > 0:
+            if '-' in para_name:
+                if para_name[-1] == '1':
+                    new_para_name = 'Charge #1'
+                elif para_name[-1] == '2':
+                    new_para_name = 'Charge #2'
+                elif para_name[-1] == '3':
+                    new_para_name = 'Charge #3'
+                elif para_name[-1] == '4':
+                    new_para_name = 'Discharge'
+                elif para_name[-1] == '5':
+                    new_para_name = 'Charge #4'
+                else:
+                    print('Current Parameter Index Outer Of Range.')
+                    sys.exit(0)
             else:
-                print('File: \" {} \" already exists.'.format(target))
-            continue
-        return 0
+                print('Current Parameter Name Error.')
+                sys.exit(0)
+            return new_para_name
 
-    def xlsx_to_csv(self, source, target):
+        else:
+            print('Current Parameter Name Empty.')
+            sys.exit(0)
+
+    def dynamic_para_extract(self, para_data):
         """"""
-        xlsx_file = pandas.read_excel(source)
-        if source.endswith('.xlsx'):
-            xlsx_file.to_csv(target)
-        return 0
+        para_dic = {}
+        # time
+        time = para_data.iloc[:, 0]
+        para_dic.update({'time': time})
+        # voltage
+        voltage = para_data.iloc[:, self.voltage_index]
+        para_dic.update({'voltage': voltage})
+        # current
+        current = para_data.iloc[:, self.current_index]
+        para_dic.update({'current': current})
+        # capacity
+        capacity = current = para_data.iloc[:, self.capacity_index]
+        para_dic.update({'capacity': capacity})
+        return para_dic
 
-
-class Data_Pre_Processor(object):
-    """"""
-    def __init__(self, organized_path):
-        # 公开属性
-        self.organized_fold_path = organized_path
-        self.data_type = ('dynamic', 'static')
-        self.current_batch_ID = ''
-        self.current_tray_ID = ''
-        self.current_data_ID = ''
-        self.current_cell_ID = ''
-        self.number_of_cell_in_a_tray = 256
-        # 私有属性（）
-
-    def data_process_static_and_dynamic(self):
+    def dynamic_para_extract_cell(self, cell_no, para_data):
         """"""
-        # 不同类型数据文件夹路径(静态，动态)
-        dynamic_fold_path = os.path.join(self.organized_fold_path, self.data_type[0])
-        static_fold_path = os.path.join(self.organized_fold_path, self.data_type[1])
-        temp_cells_dic = {}
-        # 不同批次动态和静态数据文件夹路径
-        dynamic_batch_list = os.listdir(dynamic_fold_path)
-        for batch in dynamic_batch_list:
-            self.current_batch_ID = batch
-            print('Current Batch: {}'.format(self.current_batch_ID))
-            # 读取一个批次内电池静态数据
-            static_data_in_current_batch_path = os.path.join(static_fold_path, batch + '.csv')
-            static_data_in_current_batch = pandas.read_csv(static_data_in_current_batch_path, low_memory=False)
+        temp_dic = {}
+        # time
+        time = para_data.iloc[:, 0]
+        temp_dic.update({'time': time})
+        # voltage
+        voltage = para_data.iloc[:, cell_no]
+        temp_dic.update({'voltage': voltage})
+        # current
+        current = para_data.iloc[:, cell_no + self.num_of_cell_in_tray]
+        temp_dic.update({'current': current})
+        # capacity
+        capacity = para_data.iloc[:, cell_no + (2 * self.num_of_cell_in_tray)]
+        temp_dic.update({'capacity': capacity})
+        # build dataframe
+        temp_df = pd.DataFrame(temp_dic)
+        return temp_df
 
-            dynamic_data_current_batch_fold_path = os.path.join(dynamic_fold_path, self.current_batch_ID)
-            dynamic_data_tray_list_in_current_batch = os.listdir(dynamic_data_current_batch_fold_path)
-            for tray in dynamic_data_tray_list_in_current_batch:
-                self.current_tray_ID = 'C0000' + tray
-                print('Current Tray: {}'.format(self.current_tray_ID))
-                dynamic_data_current_tray_fold_path = os.path.join(dynamic_data_current_batch_fold_path, tray)
-                dynamic_data_file_list_in_current_tray = os.listdir(dynamic_data_current_tray_fold_path)
-                # 选取一个货架内电池静态数据
-                current_tray_static_data = static_data_in_current_batch[static_data_in_current_batch['Tray ID'] ==
-                                                                        self.current_tray_ID]
-                voltage_index_range = numpy.arange(2, self.number_of_cell_in_a_tray + 2, dtype='int32')
-                voltage_index_list = voltage_index_range.tolist()
-                for cell in voltage_index_list:
+    def data_verification(self, static_df, para_df, ver_type):
+        """Un-used"""
+        # Charge  #1, Charge #2, Charge #3, Discharge, Charge #4
+        # |            |          |          |          |
+        # |-voltage    |-capacity |-capacity |-capacity |-capacity
+        ver_flag = False
+        ver_num = 0
+        tgt = 0
+        if ver_type == 'Charge #1':
+            ver = para_df['voltage'].iloc[-1]
+            tgt = int(static_df[ver_type + '.2'].iloc[-1])
+            ver_rounded = functional.round_precision(float(ver) * 1000.0)
+            ver_num = int(ver_rounded)
+        elif ver_type != 'Charge #1':
+            ver = para_df['capacity'].iloc[-1]
+            tgt = int(static_df[ver_type].iloc[-1])
+            ver_rounded = functional.round_precision(float(ver))
+            ver_num = int(ver_rounded)
+        else:
+            print('Verification Stage: Parameter No Found.')
+            sys.exit(0)
+        if abs(ver_num - tgt) < 3:
+            ver_flag = True
+        return ver_flag
 
-                    static_idx = cell - 2
-                    cell_static = current_tray_static_data.iloc[static_idx, :]
+    def read_static_data(self, batch):
+        """"""
+        current_batch_static_data_path = os.path.join(self.input_fold_path + '\\static', batch)
+        if os.path.getsize(current_batch_static_data_path):
+            # print(f'Reading File {batch}.', end='\r')
+            static_data = pd.read_csv(open(current_batch_static_data_path, 'rb'), low_memory=False)
+            # print(f'Reading Completed {batch}.', end='\r')
+            return static_data
+        else:
+            print('Static File Size = 0, Error.')
+            sys.exit(0)
 
-                    cell_name = self.current_batch_ID + '_' + self.current_tray_ID + '_' + str(static_idx + 1)
-                    cell_data_path = os.path.join(self.organized_fold_path, 'cells', cell_name)
-                    if not os.path.exists(cell_data_path):
-                        os.mkdir(cell_data_path)
-                        print('Fold: \" {} \" created success.'.format(cell_data_path))
+    def read_dynamic_para_tray(self, para_path, para_name):
+        """"""
+        current_para_path = os.path.join(para_path, para_name)
+        if os.path.getsize(current_para_path):
+            current_para_data = pd.read_csv(current_para_path)
+            return current_para_data
+        else:
+            print('Dynamic File Size = 0, Error.')
+            sys.exit(0)
+
+    def cell_no_to_tray_cell_no(self, cell_no):
+        cell_no = int(cell_no)
+        tray_cell_no = -1
+        alp = ('A', 'B', 'C', 'D',
+               'E', 'F', 'G', 'H',
+               'I', 'J', 'K', 'L',
+               'M', 'N', 'O', 'P')
+        res = (cell_no - 1) % 16
+        times = int((cell_no - 1) / 16)
+        tray_cell_no = alp[times] + str(res + 1)
+        return tray_cell_no
+
+
+
+    def file_organize(self, write=False):
+        """
+        2600P-01 文件夹结构：
+        2600P-01
+        |
+        --dynamic -- 210301-1 -- 0397 -- 0397-1.csv
+        |         |          |       |
+        |         |          |       ...
+        |         |          ...
+        |         ...
+        |
+        _static  -- 210301-1.xlsx
+                |
+                ...
+        """
+        self.write_flag = write
+        # self.make_file_dir()
+        # dynamic data path and batch list
+        dynamic_data_path = os.path.join(self.input_fold_path, 'dynamic')
+        dynamic_batch_list = os.listdir(dynamic_data_path)
+
+        # static data path and batch list
+        static_data_path = os.path.join(self.input_fold_path, 'static')
+        static_batch_list = os.listdir(static_data_path)
+
+        #
+        # cells_pickle_path = os.path.join('.\\data\\cells_dic.pickle')
+        # if os.path.exists(cells_pickle_path):
+        #    print(f'Pickle Save Path Exist.')
+        #    sys.exit(0)
+
+        # organize start
+        print(f'Input Raw Data Path:{self.input_fold_path}')
+        print(f'Output Cell Data Path:{self.output_fold_path}')
+        # progress bar
+        # batch_bar = tqdm(len(dynamic_batch_list))
+        # dic save all cell's parameters
+        # | Cell Name(batch_tray_CellNo)
+        # |
+        # | Charge #1, Charge #2, Charge #3, Discharge, Charge #4, Static
+        # |            |          |          |          |          |
+        # |            ...        ...        ...        ...         ...
+        # |
+        # |--- time - voltage - current - capacity
+        cells_dic = {}
+        err_list = []
+        for batch in iter(dynamic_batch_list):
+            self.curr_batch = batch
+            if (batch + '.csv') in static_batch_list:
+                #  read current batch static file
+                # print(f'Reading File {batch}.', end='\r')
+                current_batch_static_data = self.read_static_data(batch + '.csv')
+                # print(f'Reading Completed {batch}.')
+                # current batch tray list
+                current_batch_tray_path = os.path.join(dynamic_data_path, batch)
+                tray_list = os.listdir(current_batch_tray_path)
+                # tray progress bar
+                # tray_bar = tqdm(len(tray_list))
+                for tray in iter(tray_list):
+                    tray_name = self.tray_name_adjust(tray)
+                    self.curr_tray = tray_name
+                    current_tray_static_data = current_batch_static_data[current_batch_static_data['Tray ID'] == tray_name]
+                    if current_tray_static_data.shape[0] != self.num_of_cell_in_tray:
+                        print('Current Tray Static Data Shape Error.')
+                        sys.exit(0)
+                    current_batch_tray_params_path = os.path.join(current_batch_tray_path, tray)
+                    params_list = os.listdir(current_batch_tray_params_path)
+                    # dynamic para tray dic
+                    paras_tray_dic = {}
+                    for para_tray in iter(params_list):
+                        # read current batch-tray-parameter
+                        para_name = self.parameter_name_adjust(para_tray)
+                        # print(f'Reading File {batch}-{tray}-{para_name}.', end='\r')
+                        current_para_tray_data = self.read_dynamic_para_tray(current_batch_tray_params_path, para_tray)
+                        current_para_tray_data.iloc[0, 0] = self.curr_batch + '-' + para_tray
+                        # print(f'Reading File {batch}-{tray}-{para_name} Completed.')
+                        paras_tray_dic.update({f'{para_name}': current_para_tray_data})
+                    if not paras_tray_dic == {}:
+                        # all para of a tray will saved into paras_dic
+
+                        cell_no = [k for k in range(1, self.num_of_cell_in_tray + 1)]
+                        # Cell progress Bar
+                        with tqdm(total=self.num_of_cell_in_tray) as cell_bar:
+                            cell_bar.set_description(f'{self.curr_batch}-{self.curr_tray}-Cell Progress:')
+                            for cell in iter(cell_no):
+                                paras_dic = {}
+                                self.curr_cell = self.curr_batch + '_' + self.curr_tray + '_' + str(cell)
+                                # print(f'Processing Cell: {self.curr_cell}.', end=' ')
+                                # get cell's static data
+                                static_df = current_tray_static_data.iloc[cell - 1, 1:].to_frame().astype('str', 1)
+                                static_df_trans = pd.DataFrame(static_df.values.T,
+                                                               index=static_df.columns,
+                                                               columns=static_df.index)
+                                static_df_cp = static_df_trans.copy()
+                                paras_dic.update({'Static': static_df_cp})
+                                # data verification list
+                                para_err_list = []
+                                for para in iter(paras_tray_dic.keys()):
+                                    # verify, such as:   Charge #1          Other
+                                    #                  End Voltage(mV)   Capacity(mAH)
+                                    self.curr_para = para
+                                    # para extract mode:time, voltage, current, capacity
+                                    para_df = self.dynamic_para_extract_cell(cell, paras_tray_dic[para])
+                                    para_ver_flag = self.data_verification(static_df_trans, para_df, para)
+                                    if (not para_df.empty) and para_ver_flag:
+                                        paras_dic.update({f'{para}': para_df.copy()})
+                                        # update paras_dic to cell_dic
+                                    else:
+                                        err_name = self.curr_cell + '_' + para
+                                        err_list.append(err_name)
+                                        print('Parameter Dictionary Empty.')
+                                        # sys.exit(0)
+                                # update cells_dic
+                                # cells_dic.update({f'{self.curr_cell}': paras_dic.copy()})
+                                # print('\r' + f'Processing Cell Complete: {self.curr_cell}.', end='\r')
+                                if self.write_flag:
+                                    write_path = os.path.join(self.output_fold_path
+                                                              + '.\\xlsx', self.curr_cell + '.xlsx')
+                                    if not os.path.exists(write_path):
+                                        with pd.ExcelWriter(write_path) as writer:
+                                            # print(f'Write Cell File: {self.curr_cell}.', end='')
+                                            for name in iter(paras_dic.keys()):
+                                                paras_dic[name].to_excel(writer, sheet_name=name)
+                                    # write cell pickle file
+                                    write_pickle_path = os.path.join(self.output_fold_path
+                                                                     + '.\\pickle', self.curr_cell + '.pickle')
+                                    if not os.path.exists(write_pickle_path):
+                                        functional.save_dic_as_pickle(write_pickle_path, paras_dic)
+                                # Cell tray progress bar
+                                cell_bar.update()
                     else:
-                        print('Fold: \" {} \" already exists.'.format(cell_data_path))
-
-                    temp_dynamic_parameter_dic = {'1-charge': '',
-                                                  '2-charge': '',
-                                                  '3-charge': '',
-                                                  '4-discharge': '',
-                                                  '5-charge': '',
-                                                  }
-                    temp_dynamic_parameter_dic_key_list = list(temp_dynamic_parameter_dic.keys())
-                    for data in dynamic_data_file_list_in_current_tray:
-
-                        temp_data_dic = {'time(min)': pandas.Series(dtype='float64'),
-                                         'voltage(V)': pandas.Series(dtype='float64'),
-                                         'current(mA)': pandas.Series(dtype='float64'),
-                                         'capacity(mAh)': pandas.Series(dtype='float64')
-                                         }
-                        self.current_data_ID = data[6]
-                        dynamic_data_current_data_path = os.path.join(dynamic_data_current_tray_fold_path, data)
-                        dynamic_data_in_current_tray = pandas.read_csv(dynamic_data_current_data_path, low_memory=False)
-                        time = dynamic_data_in_current_tray.iloc[:, 1]
-
-                        voltage_idx = cell
-                        cell_voltage = dynamic_data_in_current_tray.iloc[:, voltage_idx]
-
-                        current_idx = voltage_idx + self.number_of_cell_in_a_tray
-                        cell_current = dynamic_data_in_current_tray.iloc[:, current_idx]
-
-                        capacity_idx = current_idx + self.number_of_cell_in_a_tray
-                        cell_capacity = dynamic_data_in_current_tray.iloc[:, capacity_idx]
-
-                        temp_data_dic['time(min)'] = time
-                        temp_data_dic['voltage(V)'] = cell_voltage
-                        temp_data_dic['current(mA)'] = cell_current
-                        temp_data_dic['capacity(mAh)'] = cell_capacity
-                        # temp_dynamic_parameter_dic[temp_dynamic_parameter_dic_key_list[int(self.current_data_ID) - 1]]
-                        # = temp_data_dic
-
-                        dynamic_data_file_name = os.path.join(cell_data_path, temp_dynamic_parameter_dic_key_list[int(self.current_data_ID) - 1] + '.csv')
-                        temp_dynamic_dataframe = pandas.DataFrame.from_dict(temp_data_dic)
-                        temp_dynamic_dataframe.to_csv(dynamic_data_file_name)
-
-                    static_data_file_name = os.path.join(cell_data_path, 'static_data.csv')
-                    cell_static.to_csv(static_data_file_name)
-
-                    # temp_cell_dic['dynamic parameters'] = temp_dynamic_parameter_dic
-                    # temp_cell_dic['static parameters'] = cell_static
-                    # temp_cells_dic.update({cell_name: temp_cell_dic})
-
-                    print('Current Cell: {}'.format(cell_name))
-                    current_progress_in_tray = ((static_idx + 1) / self.number_of_cell_in_a_tray) * 100
-                    print('Progress of a Tray: {} %'.format(current_progress_in_tray))
-                cells_dataframe = pandas.DataFrame.from_dict(temp_cells_dic, orient='index', columns=['static parameters', 'dynamic parameters'])
-                cells_dataframe.to_csv(self.organized_fold_path + '\\cells_dataframe.csv')
-        return 0
+                        print('Parameter in Tray Dictionary Empty.')
+                        # sys.exit(0)
+            else:
+                print(f'Current Batch:{batch}, Corresponding Static data No Found.')
+                sys.exit(0)
+        # save cells_dic as pickle
+        # print(f'Saving Cells Dic....', end='')
+        # functional.save_dic_as_pickle(cells_pickle_path, cells_dic)
+        # print('\r' + f'Save Cells Dic Complete.')
+        err_sq = pd.Series(err_list)
+        err_sq.to_csv('.\\data\\file_err_list.csv')
 
 
-# test
-m_raw_data_fold = '2600P-01-unsorted'  # 原始数据文件夹名称
-m_organized_data_fold = '2600P-01-organized'
-m_data_fold = os.path.join(os.getcwd(), 'data')
+#  test
+if __name__ == '__main__':
+    # raw data path and name
+    m_raw_data_path = '.\\data'
+    m_raw_data_fold_name = '2600P-01'
+    m_file_organizer = File_Organizer(m_raw_data_path, m_raw_data_fold_name)
+    m_file_organizer.file_organize(True)
+    """ err_file = pd.read_csv('.\\data\\file_err_list.csv')
+    err_name = err_file['0']
+    for i in iter(err_name.values):
+        temp_sp_list = i.split('-')
+        cell_no = temp_sp_list[1].split('_')[2]
+        new = m_file_organizer.cell_no_to_tray_cell_no(cell_no)"""
+    sys.exit(0)
 
-m_raw_data_fold_path = os.path.join(m_data_fold, m_raw_data_fold)
-m_organized_data_fold_path = os.path.join(m_data_fold, m_organized_data_fold)
 
-# m_file_organizer = File_Organizer(m_raw_data_fold_path)
-# m_file_organizer.static_organizer_file()
-# m_file_organizer.dynamic_organizer_file()
-
-m_data_pre_processor = Data_Pre_Processor(m_organized_data_fold_path)
-m_data_pre_processor.data_process_static_and_dynamic()

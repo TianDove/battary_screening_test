@@ -1,38 +1,58 @@
-
+#!/usr/bin/env python
+# -*- coding:utf-8 -*-
+# Author: Wang, Xiang
+""""""
 import sys
+import os
 import data_loader
-import torch
-import torch.utils.data
-import functional
+import torch.utils.data as t_u_data
+import numpy as np
 
 #  select which data to be use.
-stage_list = ['1-charge', '2-charge', '3-charge', '4-discharge', '5-charge', 'static_data']
-param_list = ['time', 'voltage', 'current', 'capacity']
+stage_list = ('Static', 'Charge #1', 'Charge #2', 'Charge #3', 'Discharge',  'Charge #4')
+param_list = ('time', 'voltage', 'current', 'capacity')
+data_file_type = ('xlsx', 'pickle')
+running_mode = ('running', 'debug')
 #  1 - use, 0 - no use
-param_mod_dic = {'1-charge': {'is_used': 1, 'index': ['time', 'voltage']},
-                 '2-charge': {'is_used': 0, 'index': []},
-                 '3-charge': {'is_used': 0, 'index': []},
-                 '4-discharge': {'is_used': 0, 'index': []},
-                 '5-charge': {'is_used': 0, 'index': []},
-                 'static_data': {'is_used': 1, 'index': ['Form-OCV #1']}}
-running_mod = ['running', 'debug']
+param_mode_dic = {
+                 'Static': ['Form-OCV #1', ],
+                 'Charge #1': ['time', 'voltage'],
+                 'Charge #2': [],
+                 'Charge #3': [],
+                 'Discharge': [],
+                 'Charge #4': []
+                 }
 epochs = 10
 batch_size = 32
 num_of_worker = 0
+# Fold Structure
+# data\2600P-01_DataSet
+# |
+# |-- pickle
+# |-- xlsx
+# |-- dataset
+#     |
+#     |--test
+#     |--train
+#     |--val
+#
 #  path of dataset
-cells_data_path = '.\\data\\2600P-01-organized\\cells'
-cells_divided_data_path = '.\\data\\2600P-01-organized\\organized_dataSet'
+cells_data_path = '.\\data\\2600P-01_DataSet\\pickle'  # Load pickle data
+cells_divided_data_path = '.\\data\\2600P-01_DataSet\\dataset'  # path store divided dataset
 
 if __name__ == '__main__':
     # Load data from folds
-    m_data_loader = data_loader.DataLoader(cells_data_path, cells_divided_data_path, param_mod_dic,
-                                           running_mod='running')
-    train, val, test = m_data_loader.dataDividing()
-    val_dataset = data_loader.cellDataSet(m_data_loader.getSampleList())
-    val_dataset_iter = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size,
-                                                   num_workers=num_of_worker, drop_last=True)
-    for epoch in range(0, epochs):
-        for data_list in val_dataset_iter:
-            data = m_data_loader.dataLoad(data_list)
-            processed_data = functional.ch1_formocv_pre_pro(data)
-    sys.exit(0)
+    m_dataLoader = data_loader.DataLoader(cells_data_path, cells_divided_data_path, param_mode_dic)
+    train_path = '.\\data\\2600P-01_DataSet\\dataset\\train'
+    cell_data_set = data_loader.CellDataSet(train_path)
+    batch_data = t_u_data.DataLoader(cell_data_set, batch_size=batch_size, shuffle=True)
+    example = np.load('.\\data\\2600P-01_DataSet\\dataset\\train\\210301-1_C000000397_1.npy')
+    data_arr_batch = np.zeros((batch_size, example.shape[0]))
+    for data_list in batch_data:
+        data_arr_batch = np.zeros((batch_size, example.shape[0]))
+        for i, data in enumerate(iter(data_list)):
+            data_path = os.path.join(train_path, data)
+            arr = np.load(data_path)
+            arr_T = arr.T
+            data_arr_batch[i, :] = arr_T
+sys.exit(0)
