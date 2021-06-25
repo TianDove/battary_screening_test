@@ -48,7 +48,7 @@ class Encoder_TransformerEncoder(nn.Module):
         """"""
         super(Encoder_TransformerEncoder, self).__init__()
         encoder = nn.TransformerEncoderLayer(d_model, nhead=nhd, dim_feedforward=hid, dropout=dropout)
-        self.encoder_lays = nn.TransformerEncoder(encoder, nly)
+        self.encoder_lays = nn.TransformerEncoder(encoder, nly, norm=nn.LayerNorm(d_model))
 
     def forward(self, X):
         """"""
@@ -87,11 +87,11 @@ class Decoder_Conv_Pooling(nn.Module):
         pass
 
 
-class MyModel(nn.Module):
+class PE_fixed_EC_transformer_DC_mlp_linear(nn.Module):
     """"""
     def __init__(self, d_model, tokenizer, nhd=8, nly=6, dropout=0.1, hid=2048):
         """"""
-        super(MyModel, self).__init__()
+        super(PE_fixed_EC_transformer_DC_mlp_linear, self).__init__()
         # position encoding
         self.position_encoding = PositionalEncoding_Fixed(d_model, dropout=dropout)
 
@@ -107,8 +107,6 @@ class MyModel(nn.Module):
         res = self.encoder(res)
         res = self.decoder(res)
         return res
-
-
 
 
 if __name__ == '__main__':

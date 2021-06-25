@@ -17,6 +17,9 @@ import model_define
 import data_loader
 import run
 
+# constant
+USE_GPU = False
+
 if __name__ == '__main__':
     # tensorboard summary define
     log_dir = '.\\runs\\MyModel\\' + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -60,32 +63,42 @@ if __name__ == '__main__':
         print(f'Model Save Path: {model_path}')
 
         # set up hyper parameter
-        d_model = 32
+        d_model = 16
         is_overlap = False
-        t_step = 16
+        t_step = 8
         tokenize_tup = (d_model, is_overlap, t_step)
-        epochs = 10
-        batch_size = 64
+        epochs = 3
+        batch_size = 32
         num_of_worker = 2
 
         #
         tokenizer = functional.Tokenizer(tokenize_tup)
         tokenizer.calculate_expamle_detoken_len(train_path)
 
-        # net_para_dic
-        nets_para_dic = {
+        # models_para_dic
+        models_para_dic = {
             'net1': {},
+
+        }
+        # model_para_dic
+        model_para_dic = {
+            'Model Name': '',
+            'Hyper Parameter': {},
 
         }
 
         #  define model
-        device = functional.try_gpu()
-        dropout = 0.1
+        if USE_GPU:
+            device = functional.try_gpu()
+        else:
+            device = 'cpu'
+        dropout = 0.0
         nhd = 4
-        nly = 6
-        hid = 2048
-        net = model_define.MyModel(d_model, tokenizer, nhd=nhd, nly=nly, dropout=dropout,
-                                   hid=hid)
+        nly = 3
+        hid = 256
+        model_name = 'PE_fixed_EC_transformer_DC_mlp_linear'
+        net = model_define.PE_fixed_EC_transformer_DC_mlp_linear(d_model, tokenizer, nhd=nhd, nly=nly, dropout=dropout,
+                                                                 hid=hid)
         # add graph
         temp_in = torch.rand(1, tokenizer.num_of_token, d_model)
         writer.add_graph(net, temp_in)
@@ -104,22 +117,12 @@ if __name__ == '__main__':
         # epoch loop
         for epoch in range(0, epochs):
             # epoch start time
-            start_epoch = time.time()
+            start_epoch_time = time.time()
 
             # train
             train_epoch_loss = 0
             train_epoch_loss = run.train(net, op, train_dataset, tokenizer, epoch, batch_train, device)
-
-            # save model every 10 epoch
-            if epoch % 5 == 0:
-                save_name = f'net_{epoch}_{train_epoch_loss}.pt'
-                save_path = os.path.join(model_path, save_name)
-                torch.save({
-                    'epoch': epoch,
-                    'model_state_dict': net.state_dict(),
-                    'optimizer_state_dict': op.state_dict(),
-                    'train_loss': train_epoch_loss,
-                }, save_path)
+            train_epoch_time = time.time()
 
             # scheduler optimizer
             #scheduler.step()
@@ -127,13 +130,33 @@ if __name__ == '__main__':
             # val
             val_epoch_loss = 0
             val_epoch_loss = run.val(net, val_dataset, tokenizer, epoch, batch_val, device)
+            val_epoch_time = time.time()
+
+            # time log
+            print('| epoch time {:5.2f}s | train time: {:5.2f}s | valid time {:5.2f}s | '
+                  .format((time.time() - start_epoch_time),
+                          (train_epoch_time - start_epoch_time),
+                          (val_epoch_time - train_epoch_time)))
+            print('-' * 89)
 
             # add scalars: epoch train loss and epoch val loss
-            scalars_dic ={
-                'train loss - epoch':train_epoch_loss,
+            scalars_dic = {
+                'train loss - epoch': train_epoch_loss,
                 'val loss - epoch': val_epoch_loss,
             }
             writer.add_scalars('loss - epoch ', scalars_dic, epoch)
+
+            # save model every 2 epoch
+            if epoch % 2 == 0:
+                save_name = f'{model_name}_{epoch}_{train_epoch_loss}_{val_epoch_loss}.pt'
+                save_path = os.path.join(model_path, save_name)
+                torch.save({
+                    'epoch': epoch,
+                    'model_state_dict': net.state_dict(),
+                    'optimizer_state_dict': op.state_dict(),
+                    'train_loss': train_epoch_loss,
+                    'val_loss': val_epoch_loss,
+                }, save_path)
 
         # test
         run.test(net, test_dataset, tokenizer, batch_test, device)

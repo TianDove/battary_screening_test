@@ -9,6 +9,7 @@ import math
 import pickle
 import sys
 import torch
+import sklearn.metrics as metrics
 
 
 def sequenceDiff(in_sq):
@@ -178,6 +179,32 @@ class Tokenizer():
         re_data = torch.cat(data_token_batch, dim=0)
         return re_data
 
+
+def data_preprocessing(in_data=None):
+    """"""
+    if in_data is not None:
+        d_shape = in_data.shape
+        bsz = d_shape[0]
+        d_numpy = in_data
+        if torch.is_tensor(in_data):
+            d_numpy = in_data.numpy()
+        d_mean = d_numpy.mean(axis=1, keepdims=True)
+        d_std = d_numpy.std(axis=1, keepdims=True)
+        out_d = (d_numpy - d_mean) / d_std
+        out_d = torch.from_numpy(out_d)
+        return out_d, d_mean, d_std
+
+
+def data_depreprocessing(in_data, d_mean, d_std):
+    """"""
+    if torch.is_tensor(in_data):
+        d_numpy = in_data.numpy()
+        out_d = (d_numpy * d_std) + d_mean
+        out_d = torch.from_numpy(out_d)
+        return out_d
+
+
+
 def try_gpu(i=0):  #@save
     """如果存在，则返回gpu(i)，否则返回cpu()。"""
     if torch.cuda.device_count() >= i + 1:
@@ -190,6 +217,29 @@ def try_all_gpus():  #@save
     devices = [
         torch.device(f'cuda:{i}') for i in range(torch.cuda.device_count())]
     return devices if devices else [torch.device('cpu')]
+
+
+def eval_wrapper(src, tgt):
+    """"""
+
+    explained_variance = metrics.explained_variance_score(tgt, src)
+    max_error = metrics.max_error(tgt, src)
+    mean_absolute_error = metrics.mean_absolute_error(tgt, src)
+    mean_squared_error = metrics.mean_squared_error(tgt, src)
+    mean_absolute_percentage_error = metrics.mean_absolute_percentage_error(tgt, src)
+    median_absolute_error = metrics.median_absolute_error(tgt, src)
+    r2_score = metrics.r2_score(tgt, src)
+
+    eval_dic = {
+        'explained_variance': explained_variance,  # 可解释方差
+        'max_error': max_error,  # 误差的最大值
+        'mean_absolute_error': mean_absolute_error,  # 误差绝对值的平均
+        'mean_squared_error': mean_squared_error,  # 均方误差
+        'mean_absolute_percentage_error': mean_absolute_percentage_error,  # 相对误差的平均
+        'median_absolute_error': median_absolute_error,  # 误差绝对值的中位数
+        'r2_score': r2_score   # R^2指标
+    }
+    return eval_dic
 
 
 if __name__ == '__main__':
