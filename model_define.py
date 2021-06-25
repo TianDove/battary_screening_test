@@ -1,81 +1,115 @@
 #!/usr/bin/env python
-# -*- coding: utf-8 -*
+# -*- coding:utf-8 -*-
+# Author: Wang, Xiang
 
-# package for model building
-import math
 import torch
+import math
 import torch.nn as nn
-import torch.nn.functional as F
-from torch.nn import TransformerEncoder, TransformerEncoderLayer
 
 
-# model define
-class TransformerModel(nn.Module):
-    """
-    Transformer model for sequence processing
-    """
-    def __init__(self, ntoken, ninp, nhead, nhid, nlayers, dropout=0.5):
-        """
-        :parameter ntoken: the size of vocabulary
-        :parameter ninp: input embedded word dimension
-        :parameter nhead: number of heads for multi-head attention mechanism
-        :parameter nhid: the dimension of the feedforward network model in nn.TransformerEncoder
-        :parameter nlayers: the number of nn.TransformerEncoderLayer in nn.TransformerEncoder
-        :parameter dropout: dropout rate
-        """
-        super(TransformerModel, self).__init__()
-        self.model_type = 'Transformer'
-        # position encoding
-        self.pos_encoder = PositionalEncoding(ninp, dropout)
-        # encoder layer
-        encoder_layers = TransformerEncoderLayer(ninp, nhead, nhid, dropout)
-        # encoder, consist of multiple Transformer encoder layer
-        self.transformer_encoder = TransformerEncoder(encoder_layers, nlayers)
-        self.encoder = nn.Embedding(ntoken, ninp)  # word embedding
-        self.ninp = ninp
-        self.decoder = nn.Linear(ninp, ntoken)
-        self.init_weights()
-
-    def generate_square_subsequent_mask(self, sz):
-        mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
-        mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
-        return mask
-
-    def init_weights(self):
-        """
-        Model initialize
-        """
-        initrange = 0.1
-        self.encoder.weight.data.uniform_(-initrange, initrange)
-        self.decoder.bias.data.zero_()
-        self.decoder.weight.data.uniform_(-initrange, initrange)
-
-    def forward(self, src, src_mask):
-        src = self.encoder(src) * math.sqrt(self.ninp)
-        src = self.pos_encoder(src)
-        output = self.transformer_encoder(src, src_mask)
-        output = self.decoder(output)
-        return output
-
-
-class PositionalEncoding(nn.Module):
-    """
-    Positiona encoding for sequence
-    """
+class PositionalEncoding_Fixed(nn.Module):
+    """"""
     def __init__(self, d_model, dropout=0.1, max_len=5000):
-        super(PositionalEncoding, self).__init__()
+        """"""
+        super(PositionalEncoding_Fixed, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
-
         pe = torch.zeros(max_len, d_model)
         position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
         div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        pe = pe.unsqueeze(0).transpose(0, 1)
+        if d_model > 2:
+            pe[:, 0::2] = torch.sin(position * div_term)  # [:, 0::2]，[axis=0所有的数据，axis=2从0开始取值，间隔为2]
+            pe[:, 1::2] = torch.cos(position * div_term)
+        else:
+            pe = torch.sin(position * div_term)  # [:, 0::2]，[axis=0所有的数据，axis=2从0开始取值，间隔为2]
+            # pe[:, 1::2] = torch.cos(position * div_term)
+        pe = pe.unsqueeze(0)
         self.register_buffer('pe', pe)
 
     def forward(self, x):
-        x = x + self.pe[:x.size(0), :]
+        """"""
+        x = x + self.pe[:, x.size(1), :]
         return self.dropout(x)
 
 
+class PositionalEncoding_Learnable(nn.Module):
+    """"""
+    def __init__(self):
+        """"""
+        super(PositionalEncoding_Learnable, self).__init__()
+        pass
+
+    def forward(self, X):
+        pass
+
+
+class Encoder_TransformerEncoder(nn.Module):
+    """"""
+    def __init__(self, d_model, nhd=8, nly=6, dropout=0.1, hid=2048):
+        """"""
+        super(Encoder_TransformerEncoder, self).__init__()
+        encoder = nn.TransformerEncoderLayer(d_model, nhead=nhd, dim_feedforward=hid, dropout=dropout)
+        self.encoder_lays = nn.TransformerEncoder(encoder, nly)
+
+    def forward(self, X):
+        """"""
+        res = self.encoder_lays(X)
+        return res
+
+
+class Decoder_MLP_Linear(nn.Module):
+    """"""
+    def __init__(self, d_model, tokenizer):
+        """"""
+        super(Decoder_MLP_Linear, self).__init__()
+        self.tokenizer = tokenizer
+        detoken_len = self.tokenizer.detoken_shape
+        linear = nn.Linear(detoken_len, detoken_len // 2)
+        relu = nn.ReLU()
+        self.hidden = nn.Sequential(linear, relu)
+        self.linear = nn.Linear(detoken_len // 2, 1)
+
+    def forward(self, X):
+        """"""
+        res = self.tokenizer.token_wrapper(X, mode='detoken')
+        res = self.hidden(res)
+        res = self.linear(res)
+        return res
+
+
+class Decoder_Conv_Pooling(nn.Module):
+    """"""
+    def __init__(self):
+        """"""
+        super(Decoder_Conv_Pooling, self).__init__()
+        self.conv1 = nn.Conv2d(1, 32, (5, 5))
+
+    def forward(self, X):
+        pass
+
+
+class MyModel(nn.Module):
+    """"""
+    def __init__(self, d_model, tokenizer, nhd=8, nly=6, dropout=0.1, hid=2048):
+        """"""
+        super(MyModel, self).__init__()
+        # position encoding
+        self.position_encoding = PositionalEncoding_Fixed(d_model, dropout=dropout)
+
+        # encoder
+        self.encoder = Encoder_TransformerEncoder(d_model, nhd=nhd, nly=nly, dropout=dropout, hid=hid)
+
+        # decoder
+        self.decoder = Decoder_MLP_Linear(d_model, tokenizer)
+
+    def forward(self, X):
+        """"""
+        res = self.position_encoding(X)
+        res = self.encoder(res)
+        res = self.decoder(res)
+        return res
+
+
+
+
+if __name__ == '__main__':
+    pass

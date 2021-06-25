@@ -17,6 +17,16 @@ import numpy as np
 import file_operation
 import functional
 
+
+def creat_dataset(data_path, bsz=32, is_shuffle=True, num_of_worker=None):
+    """"""
+    assert os.path.exists(data_path)
+    data_set = CellDataSet(data_path)
+    batch_data_set = t_u_data.DataLoader(data_set, batch_size=bsz, shuffle=is_shuffle)
+    num_of_batch = math.floor(len(os.listdir(data_path)) / bsz)
+    return batch_data_set, num_of_batch
+
+
 class CellDataSet(t_u_data.Dataset):
     """Pytorch DataSet"""
     def __init__(self, path):
@@ -24,17 +34,20 @@ class CellDataSet(t_u_data.Dataset):
         self.list_files = os.listdir(self.file_path)
         self.num_of_samples = len(self.list_files)
 
-    def read_npy(self, file_path):
-        if os.path.exists(file_path):
-            arr = np.loads(file_path)
-            return arr
+        # join path
+        self.file_path_list = []
+        for i in iter(self.list_files):
+            temp_file_path = os.path.join(self.file_path, i)
+            self.file_path_list.append(temp_file_path)
+
 
     def __getitem__(self, index):
+        data = np.load(self.file_path_list[index])
+        return data
 
-        return self.list_files[index]
 
     def __len__(self):
-        return self.num_of_samples
+        return len(self.file_path_list)
 
 
 class DataLoader():
@@ -65,13 +78,14 @@ class DataLoader():
 
     def data_loder(self):
         """"""
-        if self.check_dir():
-            cells_data_list = os.listdir(self.dataPath)
-            cells_dic = self.data_Load(cells_data_list)
-            if cells_dic != {}:
-                cells_dic_selected = self.cell_data_selection(cells_dic)
-                cells_dic_converted = self.data_convert(cells_dic_selected)
-                self.ch1_data_clean_and_interpolation(cells_dic_converted)
+        # if self.check_dir():
+        cells_data_list = os.listdir(self.dataPath)
+        cells_dic = self.data_Load(cells_data_list)
+            # if cells_dic != {}:
+        cells_dic_selected = self.cell_data_selection(cells_dic)
+        # specified for charge #1 and Form-OCV #1
+        cells_dic_converted = self.data_convert(cells_dic_selected)
+        self.ch1_data_clean_and_interpolation(cells_dic_converted)
         return 0
 
     def ch1_data_clean_and_interpolation(self, data_dic):
@@ -89,10 +103,14 @@ class DataLoader():
             df_index_time = pd.DataFrame(temp_res.values, index=temp_time.values, columns=field_list, )
             data_dic[cell][para_name] = df_index_time.copy()
         #
+        
         dic_key = iter(data_dic)
         first_df = data_dic[next(dic_key)][para_name]
-        for key in dic_key:
-            first_df = pd.concat([first_df, data_dic[key][para_name]], axis=1)
+        with tqdm(total=len(list(data_dic.keys()))) as bar:
+            bar.set_description('Charge #1 Data Concatenating....')
+            for key in dic_key:
+                bar.update()
+                first_df = pd.concat([first_df, data_dic[key][para_name]], axis=1)
         #
         row_list = list(first_df.index)
         del_row_list = []
@@ -103,7 +121,9 @@ class DataLoader():
                 del_row_list.append(index)
         #
         align_df = first_df.drop(del_row_list).copy()
+        print('Interpolation Processing....', end='')
         align_df = align_df.interpolate(method='quadratic', axis=0)
+        print('\r' + 'Interpolation Complete.')
         align_df_values = align_df.values
         mean = np.mean(align_df_values, axis=1, keepdims=True)
         std = np.std(align_df_values, axis=1, keepdims=True, ddof=1)
@@ -125,15 +145,18 @@ class DataLoader():
         col_list = list(align_df.columns)
         # res_size = [align_df.shape[0] + 1, align_df.shape[1]]
         # res_arr = np.zeros(res_size)
-        for t, col in enumerate(iter(col_list)):
-            str_split = col.split('_')
-            cell_name = str_split[0] + '_' +str_split[1] + '_' +str_split[2]
-            static_data = data_dic[cell_name]['Static'].values.squeeze(axis=1)
-            dynamic_data = align_df[col].values
-            sample_with_label = np.concatenate([dynamic_data, static_data])
-            file_name = cell_name + '.npy'
-            save_path = os.path.join(self.npy_path, file_name)
-            np.save(save_path, sample_with_label)
+        with tqdm(total=len(col_list)) as w_bar:
+            w_bar.set_description('Charge #1 Data Writing....')
+            for t, col in enumerate(iter(col_list)):
+                w_bar.update()
+                str_split = col.split('_')
+                cell_name = str_split[0] + '_' +str_split[1] + '_' +str_split[2]
+                static_data = data_dic[cell_name]['Static'].values.squeeze(axis=1)
+                dynamic_data = align_df[col].values
+                sample_with_label = np.concatenate([dynamic_data, static_data])
+                file_name = cell_name + '.npy'
+                save_path = os.path.join(self.npy_path, file_name)
+                np.save(save_path, sample_with_label)
         return 0
 
 
@@ -183,13 +206,14 @@ class DataLoader():
             val_list = shuffled_sample_list[0: val_num]
             test_list = shuffled_sample_list[val_num: val_num + test_num]
             train_list = shuffled_sample_list[val_num + test_num: val_num + test_num + train_num]
-            print(f'Data Dividing Completed.')
+            #
             train_fold = os.path.join(self.dividedPath, 'train')
             val_fold = os.path.join(self.dividedPath, 'val')
             test_fold = os.path.join(self.dividedPath, 'test')
             file_operation.move_file_to_fold(self.npy_path, train_fold, train_list)
             file_operation.move_file_to_fold(self.npy_path, val_fold, val_list)
             file_operation.move_file_to_fold(self.npy_path, test_fold, test_list)
+            print(f'Data Dividing Completed.')
 
         else:
             print(f'Sample Num Validation Error.')
@@ -241,8 +265,8 @@ class DataLoader():
 
 
 if __name__ == '__main__':
-    """
-    param_mode_dic = {
+
+    """param_mode_dic = {
         'Static': ['Form-OCV #1', ],
         'Charge #1': ['time', 'voltage'],
         'Charge #2': [],
@@ -253,6 +277,7 @@ if __name__ == '__main__':
     cells_data_path = '.\\data\\2600P-01_DataSet\\pickle'  # Load pickle data
     cells_divided_data_path = '.\\data\\2600P-01_DataSet\\dataset'  # path store divided dataset
     m_dataLoader = DataLoader(cells_data_path, cells_divided_data_path, param_mode_dic)
+    m_dataLoader.data_loder()
     m_dataLoader.data_divide(m_dataLoader.npy_path)
     batch_size = 32
     train_path = '.\\data\\2600P-01_DataSet\\dataset\\train'
@@ -267,5 +292,17 @@ if __name__ == '__main__':
             arr = np.load(data_path)
             arr_T = arr.T
             data_arr_batch[i, :] = arr_T
+    
+
+   train_path = '.\\data\\2600P-01_DataSet\\dataset\\train'
+    tokenize_para = (32, True, 16)
+    data_set, num_of_batch = creat_dataset(train_path)
+    m_tokenizer = functional.Tokenizer(tokenize_para)
+    detoken_shape, num_of_token = m_tokenizer.calculate_expamle_detoken_len(train_path)
+    for i, data in enumerate(data_set):
+        temp_data = data[:, 0:-1]
+        temp_label = data[:, -1]
+        token = m_tokenizer.token_wrapper(temp_data, mode='token', para_tup=tokenize_para)
+        detoken = m_tokenizer.token_wrapper(token, mode='detoken', para_tup=tokenize_para)"""
+
     sys.exit(0)
-    """

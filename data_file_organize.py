@@ -339,7 +339,7 @@ if __name__ == '__main__':
     m_raw_data_path = '.\\data'
     m_raw_data_fold_name = '2600P-01'
     m_file_organizer = File_Organizer(m_raw_data_path, m_raw_data_fold_name)
-    m_file_organizer.file_organize(True)
+    m_file_organizer.file_organize(False)
     """ err_file = pd.read_csv('.\\data\\file_err_list.csv')
     err_name = err_file['0']
     for i in iter(err_name.values):
