@@ -91,6 +91,8 @@ class PE_fixed_EC_transformer_DC_mlp_linear(nn.Module):
     """"""
     def __init__(self, d_model, tokenizer, nhd=8, nly=6, dropout=0.1, hid=2048):
         """"""
+        self.model_name = self.__class__.__name__
+
         super(PE_fixed_EC_transformer_DC_mlp_linear, self).__init__()
         # position encoding
         self.position_encoding = PositionalEncoding_Fixed(d_model, dropout=dropout)
@@ -106,6 +108,59 @@ class PE_fixed_EC_transformer_DC_mlp_linear(nn.Module):
         res = self.position_encoding(X)
         res = self.encoder(res)
         res = self.decoder(res)
+        return res
+
+
+class PE_fixed_EC_transformer_DC_mlp_linear_with_Resconnection(nn.Module):
+    """"""
+
+    def __init__(self, d_model, tokenizer, nhd=8, nly=6, dropout=0.1, hid=2048):
+        """"""
+        self.model_name = self.__class__.__name__
+
+        super(PE_fixed_EC_transformer_DC_mlp_linear_with_Resconnection, self).__init__()
+        # position encoding
+        self.position_encoding = PositionalEncoding_Fixed(d_model, dropout=dropout)
+
+        # encoder
+        self.encoder = Encoder_TransformerEncoder(d_model, nhd=nhd, nly=nly, dropout=dropout, hid=hid)
+
+        # decoder
+        self.decoder = Decoder_MLP_Linear(d_model, tokenizer)
+
+    def forward(self, X):
+        """"""
+        x = X
+        res = self.position_encoding(X)
+        res = self.encoder(res)
+        # add identical res-connection
+        res = res + x
+
+        res = self.decoder(res)
+        return res
+
+
+class PE_fixed_PureMLP(nn.Module):
+    """"""
+
+    def __init__(self, d_model):
+        """"""
+        self.model_name = self.__class__.__name__
+        super(PE_fixed_PureMLP, self).__init__()
+        linear = nn.Linear
+        relu = nn.ReLU()
+        # model define
+        self.hidden1 = nn.Sequential(linear(d_model, d_model * 2), relu)
+        self.hidden2 = nn.Sequential(linear(d_model * 2, d_model), relu)
+        self.hidden3 = nn.Sequential(linear(d_model, d_model // 2), relu)
+        self.linear1 = linear(d_model // 2, 1)
+
+    def forward(self, X):
+        """"""
+        res = self.hidden1(X)
+        res = self.hidden2(res)
+        res = self.hidden3(res)
+        res = self.linear1(res)
         return res
 
 

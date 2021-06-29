@@ -18,11 +18,16 @@ import data_loader
 import run
 
 # constant
-USE_GPU = False
+USE_GPU = True
+DEBUG = False
 
 if __name__ == '__main__':
     # tensorboard summary define
-    log_dir = '.\\runs\\MyModel\\' + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    if DEBUG:
+        log_dir = '.\\runs\\DEBUG\\' + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    else:
+        log_dir = '.\\runs\\MyModel\\' + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+
     with SummaryWriter(log_dir=log_dir) as writer:
         #  select which data to be use.
         # stage_list = ('Static', 'Charge #1', 'Charge #2', 'Charge #3', 'Discharge', 'Charge #4')
@@ -63,12 +68,12 @@ if __name__ == '__main__':
         print(f'Model Save Path: {model_path}')
 
         # set up hyper parameter
-        d_model = 16
+        d_model = 8
         is_overlap = False
         t_step = 8
         tokenize_tup = (d_model, is_overlap, t_step)
-        epochs = 3
-        batch_size = 32
+        epochs = 500
+        batch_size = 128
         num_of_worker = 2
 
         #
@@ -92,10 +97,10 @@ if __name__ == '__main__':
             device = functional.try_gpu()
         else:
             device = 'cpu'
-        dropout = 0.0
+        dropout = 0.1
         nhd = 4
         nly = 3
-        hid = 256
+        hid = 512
         model_name = 'PE_fixed_EC_transformer_DC_mlp_linear'
         net = model_define.PE_fixed_EC_transformer_DC_mlp_linear(d_model, tokenizer, nhd=nhd, nly=nly, dropout=dropout,
                                                                  hid=hid)
@@ -107,7 +112,7 @@ if __name__ == '__main__':
         # set optimizer
         lr = 0.001
         op = optim.SGD(net.parameters(), lr=lr, momentum=0.9)
-        #scheduler = torch.optim.lr_scheduler.StepLR(op, 1.0, gamma=0.95)
+        scheduler = torch.optim.lr_scheduler.StepLR(op, 1.0, gamma=0.95)
 
         # creat dataset
         train_dataset, batch_train = data_loader.creat_dataset(train_path, bsz=batch_size)
@@ -125,7 +130,7 @@ if __name__ == '__main__':
             train_epoch_time = time.time()
 
             # scheduler optimizer
-            #scheduler.step()
+            scheduler.step()
 
             # val
             val_epoch_loss = 0
