@@ -76,110 +76,6 @@ def load_dic_in_pickle(source_path):
         sys.exit(0)
 
 
-class Tokenizer():
-    """"""
-    def __init__(self, token_tup):
-        """
-        token_tup = (t_len, overlap, step)
-        """
-        self.t_len = token_tup[0]
-        self.overlap = token_tup[1]
-        self.step = token_tup[2]
-        self.detoken_shape = 0
-        self.num_of_token = 0
-
-    def calculate_expamle_detoken_len(self, example_path):
-        """"""
-        data_list = os.listdir(example_path)
-        data_path = os.path.join(example_path, data_list[0])
-        in_data = np.load(data_path)[0:-1]  # data specialize
-        d_size = in_data.shape
-        in_temp = in_data
-        num_of_token = None
-        detoken_shape = None
-        num_of_padding = 0
-        r_mod = d_size[0] % self.t_len
-        if not self.overlap:
-            if r_mod != 0:
-                if r_mod < self.t_len // 2:
-                    detoken_shape = d_size[0] - r_mod
-                else:
-                    num_of_padding = self.t_len - r_mod
-                    detoken_shape = d_size[0] + num_of_padding
-            num_of_token = detoken_shape // self.t_len
-        else:
-            if (d_size[0] % self.step) != (self.t_len - self.step):
-                num_of_padding = self.t_len - self.step - r_mod
-            detoken_shape = d_size[0] + num_of_padding
-            num_of_token = (detoken_shape // self.step) - 1
-        self.detoken_shape = detoken_shape
-        self.num_of_token = num_of_token
-
-    def tokenize(self, in_data):
-        """"""
-        d_size = in_data.shape
-        in_temp = in_data
-        r_mod = d_size[0] % self.t_len
-        if not self.overlap:
-            if r_mod != 0:
-                if r_mod < self.t_len // 2:
-                    in_temp = in_temp[0:-r_mod]
-                else:
-                    pad_num = in_temp[-1]
-                    num_of_padding = self.t_len - r_mod
-                    pad_tensor = torch.ones(num_of_padding) * pad_num
-                    in_temp = torch.cat((in_temp, pad_tensor))
-            out_data = in_temp.view(-1, self.t_len)
-        else:
-            if (d_size[0] % self.step) != (self.t_len - self.step):
-                pad_num = in_temp[-1]
-                num_of_padding = self.t_len - self.step - r_mod
-                pad_tensor = torch.ones(num_of_padding) * pad_num
-                in_temp = torch.cat((in_temp, pad_tensor))
-            num_of_token = (in_temp.shape[0] // self.step) - 1
-            out_data = torch.zeros((num_of_token, self.t_len))
-            for stp in range(num_of_token):
-                index = stp * self.step
-                temp_token = in_temp[index:index + self.t_len]
-                out_data[stp, :] = temp_token
-        return out_data
-
-    def detokenize(self, in_data):
-        out_data = None
-        org_size = in_data.shape
-        if not self.overlap:
-            out_data = in_data.view(1, -1)
-        else:
-            out_data = torch.zeros(1, (org_size[0] * self.step) + (self.t_len - self.step))
-            out_data[0, 0: self.t_len].copy_(in_data[0, :])
-            for i in range(org_size[0] - 1):
-                padding_tensor = torch.zeros(self.step)
-                t_1 = torch.cat((out_data[0, i * self.step: i * self.step + self.t_len], padding_tensor))
-                t_2 = torch.cat((padding_tensor, in_data[i + 1, :]))
-                temp = t_1 + t_2
-                mid = temp[self.step: self.step + (self.t_len - self.step)] / 2
-                temp[self.step: self.step + (self.t_len - self.step)] = mid
-                out_data[0, i * self.step: i * self.step + self.t_len + self.step] = temp
-        return out_data
-
-    def token_wrapper(self, data_batch, mode='token'):
-        """"""
-        data_shape = data_batch.shape
-        data_token_batch = []
-        for i in range(data_shape[0]):
-            if mode == 'token':
-                arr_token = self.tokenize(data_batch[i])
-                arr_token = arr_token.unsqueeze(0)
-            elif mode == 'detoken':
-                arr_token = self.detokenize(data_batch[i])
-            else:
-                raise Exception('Tokenize Mode Error.')
-            data_token_batch.append(arr_token)
-        # convert data
-        re_data = torch.cat(data_token_batch, dim=0)
-        return re_data
-
-
 def data_preprocessing(in_data=None):
     """"""
     if in_data is not None:
@@ -242,30 +138,143 @@ def eval_wrapper(src, tgt):
     return eval_dic
 
 
+class Tokenizer():
+    """"""
+    def __init__(self, token_tup):
+        """
+        token_tup = (t_len, overlap, step)
+        """
+        self.t_len = token_tup[0]
+        self.overlap = token_tup[1]
+        self.step = token_tup[2]
+        self.detoken_shape = 0
+        self.num_of_token = 0
+
+    def calculate_expamle_detoken_len(self, example_path):
+        """"""
+        data_list = os.listdir(example_path)
+        data_path = os.path.join(example_path, data_list[0])
+        in_data = np.load(data_path)[0:-1]  # data specialize
+        d_size = in_data.shape
+        in_temp = in_data
+        num_of_token = None
+        detoken_shape = None
+        num_of_padding = 0
+        r_mod = d_size[0] % self.t_len
+        if not self.overlap:
+            if r_mod != 0:
+                if r_mod < self.t_len // 2:
+                    detoken_shape = d_size[0] - r_mod
+                else:
+                    num_of_padding = self.t_len - r_mod
+                    detoken_shape = d_size[0] + num_of_padding
+            num_of_token = detoken_shape // self.t_len
+        else:
+            if (d_size[0] % self.step) != (self.t_len - self.step):
+                num_of_padding = self.t_len - self.step - r_mod
+            detoken_shape = d_size[0] + num_of_padding
+            num_of_token = (detoken_shape // self.step) - 1
+        self.detoken_shape = detoken_shape
+        self.num_of_token = num_of_token
+
+    def tokenize(self, in_data):
+        """"""
+        in_temp = in_data
+        d_size = in_temp.shape
+        r_mod = d_size[0] % self.t_len
+        if not self.overlap:
+            if r_mod != 0:
+                pad_num = in_temp[-1]
+                num_of_padding = self.t_len - r_mod
+                pad_arr = np.ones(num_of_padding) * pad_num
+                in_temp = np.concatenate((in_temp, pad_arr))
+            out_data = np.reshape(in_temp, (-1, self.t_len))
+            num_of_token = out_data.shape[0]
+        else:
+            num_of_step = math.ceil((d_size[0] - (self.t_len - self.step)) / self.step)
+            detoken_len = (num_of_step - 1) * self.step + self.t_len
+            if (detoken_len % d_size[0]) != 0:
+                pad_num = in_temp[-1]
+                num_of_padding = detoken_len - d_size[0]
+                pad_arr = np.ones(num_of_padding) * pad_num
+                in_temp = np.concatenate((in_temp, pad_arr))
+            # overlap tokenize
+            out_data = np.zeros((num_of_step, self.t_len))
+            for stp in range(num_of_step):
+                index = stp * self.step
+                temp_token = in_temp[index:index + self.t_len]
+                out_data[stp, :] = temp_token
+            num_of_token = out_data.shape[0]
+        return out_data
+
+    def detokenize(self, in_data):
+        """"""
+        org_size = in_data.shape
+        if not self.overlap:
+            out_data = in_data.view(1, -1)
+        else:
+            num_of_token = org_size[0]
+            out_data = torch.zeros((num_of_token - 1) * self.step + self.t_len)
+            first_token = in_data[0, :]
+            out_data[0:self.t_len] = first_token  # put first token into out sequence
+            for i in range(1, num_of_token):
+                curr_token = in_data[i, :]  # get token from second token
+                curr_start_index = i * self.step
+                curr_end_index = curr_start_index + self.t_len
+                padded_curr_token = torch.zeros((num_of_token - 1) * self.step + self.t_len)
+                padded_curr_token[curr_start_index: curr_end_index] = curr_token
+                out_data += padded_curr_token
+                curr_mid_start_index = curr_start_index
+                curr_mid_end_index = curr_start_index + self.step
+                out_data[curr_mid_start_index: curr_mid_end_index] /= 2
+        return out_data
+
+    def token_wrapper(self, data, *args):
+        """"""
+        if args[0] == 'token':
+            assert (len(data.shape) == 1) and (type(data) is np.ndarray)
+            arr_token = self.tokenize(data)
+        elif args[0] == 'detoken':
+            # in_data is a tensor:(number of token, token length)
+            assert torch.is_tensor(data) and (len(data.shape) == 2)
+            arr_token = self.detokenize(data)
+        else:
+            raise Exception('Tokenize Mode Error.')
+        # convert data
+        re_data = arr_token
+        return re_data
+
+
+
 if __name__ == '__main__':
     """"""
-    """is_over_lap = True
+    import data_loader
+
+    # dataset name
+    dataset_name = 'train'
+    dataset_path = '.\\data\\2600P-01_DataSet\\dataset\\' + dataset_name
+
+    # tokenizer tup
     t_len = 32
-    example = np.load('.\\data\\2600P-01_DataSet\\dataset\\val\\210301-1_C000000397_4.npy')
-    data = example[:-1]
-    label = example[-1]
-    sample = tokenize(data, t_len=t_len, overlap=is_over_lap)
-    out = detokenize(sample, t_len=t_len, overlap=is_over_lap)"""
-    import matplotlib
-    import matplotlib.pyplot as plt
-    from tqdm import tqdm
-    file_path = '.\\data\\2600P-01_DataSet\\pickle'
-    file_list = os.listdir(file_path)
-    fig, ax = plt.subplots()
-    with tqdm(total=len(file_list)) as bar:
-        bar.set_description('Loading Data...')
-        for i, file in enumerate(iter(file_list)):
-            bar.update()
-            file_name = os.path.join(file_path, file)
-            data = load_dic_in_pickle(file_name)
-            temp_form_ocv_1 = data['Static']['Form-OCV #1'].astype('float32', 1).item()
-            if 3300 < temp_form_ocv_1 and temp_form_ocv_1 < 3900:
-                ax.scatter(i, temp_form_ocv_1)
-                plt.pause(0.001)
-    plt.show()
+    is_overlap = True
+    step = 16
+    token_tup = (t_len, is_overlap, step)
+    batch_size = 32
+
+    # tokenizer
+    tokenizer = Tokenizer(token_tup)
+    # creat dataset
+    dataset, num_of_batch = data_loader.creat_dataset(dataset_path, bsz=batch_size,
+                                                      is_shuffle=True, num_of_worker=0)
+    # batch loop
+    file_list = os.listdir(dataset_path)
+    for batch_index, raw_data_path in enumerate(file_list):
+        raw_data = np.load(os.path.join(dataset_path, raw_data_path))
+        temp_data = raw_data[0:-1]
+        temp_label = raw_data[-1]
+        data_tokenized = tokenizer.token_wrapper(temp_data, 'token')
+        # de-tokenize
+        de_token_in = torch.from_numpy(data_tokenized)
+        data_detokenized = tokenizer.token_wrapper(de_token_in, 'detoken')
+        print('')
 

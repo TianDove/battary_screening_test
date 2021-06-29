@@ -29,10 +29,17 @@ def creat_dataset(data_path, bsz=32, is_shuffle=True, num_of_worker=None):
 
 class CellDataSet(t_u_data.Dataset):
     """Pytorch DataSet"""
-    def __init__(self, path):
+    def __init__(self, path, transform=None, trans_para=None):
         self.file_path = path
         self.list_files = os.listdir(self.file_path)
         self.num_of_samples = len(self.list_files)
+
+        #
+        self.transform = None
+        self.trans_para = None
+        if (transform is not None) and (trans_para is not None):
+            self.transform = transform
+            self.trans_para = trans_para
 
         # join path
         self.file_path_list = []
@@ -40,11 +47,11 @@ class CellDataSet(t_u_data.Dataset):
             temp_file_path = os.path.join(self.file_path, i)
             self.file_path_list.append(temp_file_path)
 
-
     def __getitem__(self, index):
         data = np.load(self.file_path_list[index])
+        if (self.transform is not None) and (self.trans_para is not None):
+            data = self.transform(data, self.trans_para)
         return data
-
 
     def __len__(self):
         return len(self.file_path_list)
@@ -275,34 +282,7 @@ if __name__ == '__main__':
         'Charge #4': []
     }
     cells_data_path = '.\\data\\2600P-01_DataSet\\pickle'  # Load pickle data
-    cells_divided_data_path = '.\\data\\2600P-01_DataSet\\dataset'  # path store divided dataset
-    m_dataLoader = DataLoader(cells_data_path, cells_divided_data_path, param_mode_dic)
-    m_dataLoader.data_loder()
-    m_dataLoader.data_divide(m_dataLoader.npy_path)
-    batch_size = 32
-    train_path = '.\\data\\2600P-01_DataSet\\dataset\\train'
-    cell_data_set = CellDataSet(train_path)
-    batch_data = t_u_data.DataLoader(cell_data_set, batch_size=batch_size, shuffle=True)
-    example = np.load('.\\data\\2600P-01_DataSet\\dataset\\train\\210301-1_C000000397_1.npy')
-    data_arr_batch = np.zeros((batch_size, example.shape[0]))
-    for data_list in batch_data:
-        data_arr_batch = np.zeros((batch_size, example.shape[0]))
-        for i, data in enumerate(iter(data_list)):
-            data_path = os.path.join(train_path, data)
-            arr = np.load(data_path)
-            arr_T = arr.T
-            data_arr_batch[i, :] = arr_T
-    
+    cells_divided_data_path = '.\\data\\2600P-01_DataSet\\dataset'  # path store divided dataset"""
 
-   train_path = '.\\data\\2600P-01_DataSet\\dataset\\train'
-    tokenize_para = (32, True, 16)
-    data_set, num_of_batch = creat_dataset(train_path)
-    m_tokenizer = functional.Tokenizer(tokenize_para)
-    detoken_shape, num_of_token = m_tokenizer.calculate_expamle_detoken_len(train_path)
-    for i, data in enumerate(data_set):
-        temp_data = data[:, 0:-1]
-        temp_label = data[:, -1]
-        token = m_tokenizer.token_wrapper(temp_data, mode='token', para_tup=tokenize_para)
-        detoken = m_tokenizer.token_wrapper(token, mode='detoken', para_tup=tokenize_para)"""
 
     sys.exit(0)
