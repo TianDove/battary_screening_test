@@ -6,6 +6,7 @@ import os
 import sys
 
 import pandas as pd
+import torch
 import torch.utils.data as t_u_data
 import random
 import math
@@ -18,11 +19,11 @@ import file_operation
 import functional
 
 
-def creat_dataset(data_path, bsz=32, is_shuffle=True, num_of_worker=None):
+def creat_dataset(data_path, bsz=32, is_shuffle=True, num_of_worker=0, transform=None, trans_para=None):
     """"""
     assert os.path.exists(data_path)
-    data_set = CellDataSet(data_path)
-    batch_data_set = t_u_data.DataLoader(data_set, batch_size=bsz, shuffle=is_shuffle)
+    data_set = CellDataSet(data_path, transform, trans_para)
+    batch_data_set = t_u_data.DataLoader(data_set, batch_size=bsz, shuffle=is_shuffle, num_workers=num_of_worker)
     num_of_batch = math.floor(len(os.listdir(data_path)) / bsz)
     return batch_data_set, num_of_batch
 
@@ -49,9 +50,14 @@ class CellDataSet(t_u_data.Dataset):
 
     def __getitem__(self, index):
         data = np.load(self.file_path_list[index])
+        temp_data = data[0:-1]
+        temp_label = data[-1]
         if (self.transform is not None) and (self.trans_para is not None):
-            data = self.transform(data, self.trans_para)
-        return data
+            temp_data = data[0:-1]
+            temp_label = data[-1]
+            temp_data = self.transform(temp_data, self.trans_para)
+        return {'data': temp_data,
+                'label': temp_label}
 
     def __len__(self):
         return len(self.file_path_list)

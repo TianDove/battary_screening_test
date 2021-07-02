@@ -62,7 +62,8 @@ class Decoder_MLP_Linear(nn.Module):
         """"""
         super(Decoder_MLP_Linear, self).__init__()
         self.tokenizer = tokenizer
-        detoken_len = self.tokenizer.detoken_shape
+        # detoken_len = self.tokenizer.detoken_len
+        detoken_len = 160
         linear = nn.Linear(detoken_len, detoken_len // 2)
         relu = nn.ReLU()
         self.hidden = nn.Sequential(linear, relu)
@@ -70,7 +71,14 @@ class Decoder_MLP_Linear(nn.Module):
 
     def forward(self, X):
         """"""
-        res = self.tokenizer.token_wrapper(X, mode='detoken')
+        batch_size = X.shape[0]
+        de_token_list = []
+        for i in range(batch_size):
+            temp_data = X[i, :, :]
+            temp_detoken = self.tokenizer.token_wrapper(temp_data, 'detoken')
+            temp_detoken = temp_detoken[0, 0:160].unsqueeze(0)
+            de_token_list.append(temp_detoken)
+        res = torch.cat(de_token_list)
         res = self.hidden(res)
         res = self.linear(res)
         return res

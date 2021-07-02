@@ -136,7 +136,7 @@ def test(model, data_set, tokenizer, num_of_data, device=None):
         for j, raw_data in enumerate(data_set):
             # get label and tokenize data
             temp_data = raw_data[:, 0:-1]
-            input_batch = tokenizer.token_wrapper(temp_data, mode='token')
+            input_batch = tokenizer.token_wrapper(temp_data, 'token')
             label_batch = raw_data[:, -1] / 1000
 
             # move data to GPU

@@ -140,42 +140,34 @@ def eval_wrapper(src, tgt):
 
 class Tokenizer():
     """"""
-    def __init__(self, token_tup):
+    def __init__(self, token_tuple=(32, True, 16)):
         """
         token_tup = (t_len, overlap, step)
         """
-        self.t_len = token_tup[0]
-        self.overlap = token_tup[1]
-        self.step = token_tup[2]
-        self.detoken_shape = 0
-        self.num_of_token = 0
+        self.t_len = token_tuple[0]
+        self.overlap = token_tuple[1]
+        self.step = token_tuple[2]
+        self.detoken_len = None
 
     def calculate_expamle_detoken_len(self, example_path):
         """"""
         data_list = os.listdir(example_path)
         data_path = os.path.join(example_path, data_list[0])
         in_data = np.load(data_path)[0:-1]  # data specialize
-        d_size = in_data.shape
         in_temp = in_data
-        num_of_token = None
-        detoken_shape = None
-        num_of_padding = 0
+        d_size = in_temp.shape
         r_mod = d_size[0] % self.t_len
         if not self.overlap:
+            num_of_padding = 0
             if r_mod != 0:
-                if r_mod < self.t_len // 2:
-                    detoken_shape = d_size[0] - r_mod
-                else:
-                    num_of_padding = self.t_len - r_mod
-                    detoken_shape = d_size[0] + num_of_padding
-            num_of_token = detoken_shape // self.t_len
+                pad_num = in_temp[-1]
+                num_of_padding = self.t_len - r_mod
+            de_token_len = d_size[0] + num_of_padding
         else:
-            if (d_size[0] % self.step) != (self.t_len - self.step):
-                num_of_padding = self.t_len - self.step - r_mod
-            detoken_shape = d_size[0] + num_of_padding
-            num_of_token = (detoken_shape // self.step) - 1
-        self.detoken_shape = detoken_shape
-        self.num_of_token = num_of_token
+            num_of_step = math.ceil((d_size[0] - (self.t_len - self.step)) / self.step)
+            de_token_len = (num_of_step - 1) * self.step + self.t_len
+        self.detoken_len = de_token_len
+
 
     def tokenize(self, in_data):
         """"""
