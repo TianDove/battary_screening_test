@@ -6,7 +6,6 @@ import os
 import sys
 
 import pandas as pd
-import torch
 import torch.utils.data as t_u_data
 import random
 import math
@@ -19,7 +18,12 @@ import file_operation
 import functional
 
 
-def creat_dataset(data_path, bsz=32, is_shuffle=True, num_of_worker=0, transform=None, trans_para=None):
+def creat_dataset(data_path: str,
+                  bsz: int = 32,
+                  is_shuffle: bool = True,
+                  num_of_worker: int = 0,
+                  transform: tuple = None,
+                  trans_para: tuple = None) -> (t_u_data.DataLoader,  int):
     """"""
     assert os.path.exists(data_path)
     data_set = CellDataSet(data_path, transform, trans_para)
@@ -30,7 +34,7 @@ def creat_dataset(data_path, bsz=32, is_shuffle=True, num_of_worker=0, transform
 
 class CellDataSet(t_u_data.Dataset):
     """Pytorch DataSet"""
-    def __init__(self, path, transform=None, trans_para=None):
+    def __init__(self, path: str, transform: tuple = None, trans_para: tuple = None) -> None:
         self.file_path = path
         self.list_files = os.listdir(self.file_path)
         self.num_of_samples = len(self.list_files)
@@ -39,14 +43,25 @@ class CellDataSet(t_u_data.Dataset):
         self.transform = None
         self.trans_para = None
         if (transform is not None) and (trans_para is not None):
+            assert (type(transform) == tuple) and (type(trans_para) == tuple)
+            assert len(transform) == len(trans_para)
             self.transform = transform
             self.trans_para = trans_para
+            # init transform
+            trans_list = []
+            for tran_i, para_i in zip(iter(self.transform), iter(self.trans_para)):
+                temp_trans = tran_i(**(para_i if para_i else {}))
+                trans_list.append(temp_trans)
 
         # join path
         self.file_path_list = []
         for i in iter(self.list_files):
             temp_file_path = os.path.join(self.file_path, i)
             self.file_path_list.append(temp_file_path)
+
+    def pre_processing(self):
+        """"""
+        pass
 
     def __getitem__(self, index):
         data = np.load(self.file_path_list[index])
@@ -55,7 +70,8 @@ class CellDataSet(t_u_data.Dataset):
         if (self.transform is not None) and (self.trans_para is not None):
             temp_data = data[0:-1]
             temp_label = data[-1]
-            temp_data = self.transform(temp_data, self.trans_para)
+            for tran_i, para_i in zip(iter(self.transform), iter(self.trans_para)):
+                temp_data = tran_i(**(para_i if para_i else {}))
         return {'data': temp_data,
                 'label': temp_label}
 
@@ -242,7 +258,7 @@ class DataLoader():
                 for i in iter(path_list):
                     cell_path = os.path.join(self.dataPath, i)
                     cell_name = os.path.splitext(i)[0]
-                    cell_dic = functional.load_dic_in_pickle(cell_path)
+                    cell_dic = file_operation.load_dic_in_pickle(cell_path)
                     data.update({f'{cell_name}': cell_dic})
                     data_read_bar.update()
         return data
@@ -278,7 +294,6 @@ class DataLoader():
 
 
 if __name__ == '__main__':
-
     """param_mode_dic = {
         'Static': ['Form-OCV #1', ],
         'Charge #1': ['time', 'voltage'],
@@ -289,6 +304,4 @@ if __name__ == '__main__':
     }
     cells_data_path = '.\\data\\2600P-01_DataSet\\pickle'  # Load pickle data
     cells_divided_data_path = '.\\data\\2600P-01_DataSet\\dataset'  # path store divided dataset"""
-
-
     sys.exit(0)

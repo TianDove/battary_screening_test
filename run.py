@@ -4,161 +4,193 @@
 import time
 import torch
 import torch.nn as nn
+import torch.optim
+from torch.utils.tensorboard import SummaryWriter
+
+# import self defined
+import file_operation
 
 # constant
-import functional
-
 BATCH_LOG_INTERVAL = 10
+
 # set net loss function
-criterion = nn.MSELoss()
+CRITERION = nn.MSELoss()
 
 
-def train(model, optimizer, data_set, tokenizer, current_epoch, num_of_batch, device=None):
-    """"""
-    assert device is not None
-    # set model to train mode
-    model.train()
-    optimizer.zero_grad()
-    epoch_loss = 0
-    batch_loss = 0
+class Run():
+    """
 
-    # batch loop
-    for batch_index, raw_data in enumerate(data_set):
-        start_time = time.time()  # get start time
-        # get label and tokenize data
-        temp_data = raw_data[:, 0:-1]
+    """
+    def __int__(self,
+                model: nn.Module,
+                optimizer: torch.optim,
+                loss: nn.Module,
+                dataset_dic: dict,
+                scheduler: torch.optim.lr_scheduler = None,
+                device: torch.device = 'cpu',
+                writer: SummaryWriter = None) -> None:
+        """
+        dataset_dic:dictionary contain train, validation and test data set,
+                    like {'train_data_set':..., 'num_of_train_batch':...,
+                          'val_data_set':...,'num_of_val_batch'...,
+                          'test_data_set':..., 'num_of_train_batch':...}
+        """
+        self.model = model
+        self.optimizer = optimizer
+        self.dataset_dic = dataset_dic
+        self.scheduler = scheduler
+        self.device = device
+        self.writer = writer
+        self.loss = loss
 
-        #temp_label = raw_data[:, -1]
-        #temp_data_pro, d_mean, d_std = functional.data_preprocessing(temp_data)
-        #temp_data_de = functional.data_depreprocessing(temp_data_pro, d_mean, d_std)
+        # loss variable
+        self.batch_train_loss = 0
+        self.batch_log_interval_train_loss = 0
+        self.epoch_train_loss = 0
+        self.epoch_val_loss = 0
+        self.test_loss = 0
+        self.epoch_val_loss_list = []
+        self.test_loss_list = []
 
-        input_batch = tokenizer.token_wrapper(temp_data, mode='token')
-        label_batch = raw_data[:, -1] / 1000
+        # init time dictionary
+        self.record_time_dic = {
+            'epoch_start_time': 0.0,
+            'train_start_time': 0.0,
+            'train_end_time': 0.0,
+            'train_batch_start_time': 0.0,
+            'train_batch_end_time': 0.0,
+            'val_start_time': 0.0,
+            'epoch_end_time': 0.0,
+            'test_start_time': 0.0,
+            'test_end_time': 0.0
+        }
+        # current loop state
+        self.curr_epoch = None
+        self.curr_batch = None
+        self.curr_stage = None
 
-        # move data to GPU
-        input_batch = input_batch.to(device)
-        label_batch = label_batch.to(device)
+    def train_model(self, num_epochs: int = 3) -> None:
+        """
 
-        # start batch
-        optimizer.zero_grad()
-        out_batch = model(input_batch)
-        if len(out_batch.shape) > 1:
-            out_batch = out_batch.squeeze(1)
+        """
 
-        # calculate batch loss
-        loss_batch = criterion(out_batch, label_batch)
-
-        # accumulate loss
-        scalar_loss = loss_batch.detach().item()
-        batch_loss += scalar_loss
-        epoch_loss += scalar_loss
-
-        # update model
-        loss_batch.backward()
-        optimizer.step()
-
-        # log batch train
-        log_interval = BATCH_LOG_INTERVAL
-        if (batch_index % log_interval == 0 and batch_index > 0) or batch_index == num_of_batch - 1:
-            if batch_index == num_of_batch - 1 :
-                log_interval = num_of_batch % log_interval
-            cur_loss = batch_loss / log_interval
-            elapsed = time.time() - start_time
-            print('| '
-                  'epoch {:3d} | '
-                  '{:5d}/{:5d} batches | '
-                  'lr {:07.6f} | '
-                  'ms/batch {:5.2f} | '
-                  'loss {:7.6f} |'.format(
-                current_epoch, batch_index, num_of_batch - 1, optimizer.param_groups[0]['lr'],
-                elapsed * 1000 / log_interval,
-                cur_loss))
-            batch_loss = 0
-
-    # return epoch loss
-    epoch_loss /= num_of_batch
-    return epoch_loss
-
-
-def val(model, data_set, tokenizer, current_epoch, num_of_data, device=None):
-    """"""
-    assert device is not None
-    # set model val mode
-    model.eval()
-    val_total_loss = 0
-    val_loss_list = []
-    start_time = time.time()  # get start time
-    with torch.no_grad():
-        for j, raw_data in enumerate(data_set):
-            # get label and tokenize data
-            temp_data = raw_data[:, 0:-1]
-            input_batch = tokenizer.token_wrapper(temp_data, mode='token')
-            label_batch = raw_data[:, -1] / 1000
-
-            # move data to GPU
-            input_batch = input_batch.to(device)
-            label_batch = label_batch.to(device)
-
-            # start batch
-            out_batch = model(input_batch)
-            if len(out_batch.shape) > 1:
-                out_batch = out_batch.squeeze(1)
-
-            # calculate batch loss
-            temp_val_loss = criterion(out_batch, label_batch).item()
-            val_total_loss += temp_val_loss
-            val_loss_list.append(temp_val_loss)
-
-    # return val loss
-    val_total_loss /= num_of_data
-
-    # log val
-    print('-' * 89)
-    print('| end of epoch {:3d} '
-          '| val total time: {:5.2f}s '
-          '| valid loss {:7.6f} | '
-          .format(current_epoch,
-                  (time.time() - start_time),
-                  val_total_loss))
-    print('-' * 89)
-    return val_total_loss
+        # epoch loop
+        for epoch in range(num_epochs):
+            self.curr_epoch = epoch  # log current epoch index
+            self.record_time_dic['epoch_start_time'] = time.time()  # log epoch start time
+            # setup training
+            self.model.train()
+            self.epoch_train_loss = 0
 
 
-def test(model, data_set, tokenizer, num_of_data, device=None):
-    """"""
-    assert device is not None
-    # set model val mode
-    model.eval()
-    test_total_loss = 0
-    test_loss_list = []
-    start_time = time.time()  # get start time
-    with torch.no_grad():
-        for j, raw_data in enumerate(data_set):
-            # get label and tokenize data
-            temp_data = raw_data[:, 0:-1]
-            input_batch = tokenizer.token_wrapper(temp_data, 'token')
-            label_batch = raw_data[:, -1] / 1000
+            # batch loop
+            self.record_time_dic['train_start_time'] = time.time()  # log training start time
+            for batch_index, train_data in enumerate(self.dataset_dic['train_data_set']):
+                self.curr_stage = 'train'  # log current stage
+                self.curr_batch = batch_index  # log current batch index
+                self.record_time_dic['train_batch_start_time'] = time.time()  # log training batch start time
+                self.batch_train_loss = 0
+                # process
+                input_data = train_data['data'].to(self.device)
+                input_label = train_data['label'].to(self.device)
+                self.optimizer.zero_grad()
+                out = self.model(input_data)
+                if len(out.shape) > 1:
+                    out = out.squeeze(1)
+                scalar_loss = self.loss(out, input_label)
+                self.batch_train_loss = scalar_loss.detach().item()
+                self.epoch_train_loss += scalar_loss.detach().item()
+                out.backward()
+                self.optimizer.step()
+                if self.scheduler is not None:
+                    self.scheduler.step()
+                self.record_time_dic['train_batch_end_time'] = time.time()  # log training batch end time
+            self.record_time_dic['train_end_time'] = time.time()  # log training end time
+            # calculate average train loss of epoch
+            self.epoch_train_loss /= self.dataset_dic['num_of_train_batch']
 
-            # move data to GPU
-            input_batch = input_batch.to(device)
-            label_batch = label_batch.to(device)
+            # setup validation
+            self.model.eval()
+            self.epoch_val_loss = 0
+            self.epoch_val_loss_list = []
+            self.record_time_dic['val_start_time'] = time.time()  # log valid start time
+            with torch.no_grad():
+                for val_index, val_data in enumerate(self.dataset_dic['val_data_set']):
+                    self.curr_stage = 'val'
+                    input_data = val_data['data'].to(self.device)
+                    input_label = val_data['label'].to(self.device)
+                    out = self.model(input_data)
+                    if len(out.shape) > 1:
+                        out = out.squeeze(1)
+                    scalar_loss = self.loss(out, input_label)
+                    self.epoch_val_loss += scalar_loss.item()
+                    self.epoch_val_loss_list.append(scalar_loss.item())
+            self.record_time_dic['epoch_end_time'] = time.time()  # log epoch end time
+            # calculate average valid loss of epoch
+            self.epoch_val_loss /= self.dataset_dic['num_of_val_batch']
 
-            # start batch
-            out_batch = model(input_batch)
-            if len(out_batch.shape) > 1:
-                out_batch = out_batch.squeeze(1)
+    def test_model(self) -> None:
+        """
 
-            # calculate batch loss
-            temp_test_loss = criterion(out_batch, label_batch).item()
-            test_total_loss += temp_test_loss
-            test_loss_list.append(temp_test_loss)
-            
-    # return test los
-    test_total_loss /= num_of_data
-    # log val
-    print('#' * 89)
-    print('| Test Stage | time: {:5.2f}s | test loss {:7.6f} | '
-          .format((time.time() - start_time), test_total_loss))
-    print('#' * 89)
-    return test_total_loss
+        """
+        # setup validation
+        self.model.eval()
+        self.test_loss = 0
+        self.test_loss_list = []
+        self.record_time_dic['test_start_time'] = time.time()  # log test start time
+        with torch.no_grad():
+            for test_index, test_data in enumerate(self.dataset_dic['test_data_set']):
+                self.curr_stage = 'test'
+                input_data = test_data['data'].to(self.device)
+                input_label = test_data['label'].to(self.device)
+                out = self.model(input_data)
+                if len(out.shape) > 1:
+                    out = out.squeeze(1)
+                scalar_loss = self.loss(out, input_label)
+                self.test_loss += scalar_loss.item()
+                self.test_loss_list.append(scalar_loss.item())
+        self.record_time_dic['test_end_time'] = time.time()  # log test end time
+        # calculate average test loss of epoch
+        self.test_loss /= self.dataset_dic['num_of_test_batch']
 
+    def log(self, log_file_path, mode: str = 'train') -> None:
+        str_data = ''
+        separator = ''
+        if mode == 'train':
+            # log batch train
+            separator = '-' * 89
+            str_data = '| Epoch {:3d} | {:5d}/{:5d} batches | lr {:10.9f} | ms/batch {:5.2f} | Loss {:10.9f} |'.format(
+                    self.curr_epoch,
+                    self.curr_batch, self.dataset_dic['num_of_train_batch'] - 1,
+                    self.optimizer.param_groups[0]['lr'],
+                    self.record_time_dic['train_batch_end_time'] - self.record_time_dic['train_batch_start_time'],
+                    self.batch_train_loss)
+
+        elif mode == 'val':
+            # log val
+            separator = '-' * 89
+            str_data = '| End of epoch {:3d} | Val Total Time: {:5.2f}s | Avg Valid Loss {:10.9f} | '.format(
+                        self.curr_epoch,
+                        self.record_time_dic['epoch_end_time'] - self.record_time_dic['val_start_time'],
+                        self.epoch_val_loss)
+
+        elif mode == 'test':
+            # log test
+            separator = '#' * 89
+            str_data = '| Test Stage | Test Total Time: {:5.2f}s | Avg Test Loss {:10.9f} | '.format(
+                self.record_time_dic['test_end_time'] - self.record_time_dic['test_start_time'],
+                self.test_loss)
+        else:
+            raise ValueError('Input Log Mode Error.')
+
+        # write to file
+        if str_data != '':
+            file_operation.write_txt(log_file_path, separator)
+            file_operation.write_txt(log_file_path, str_data)
+            file_operation.write_txt(log_file_path, separator)
+        else:
+            raise ValueError('String Data Container Empty Error.')
+
+
+if __name__ == '__main__':
+    pass

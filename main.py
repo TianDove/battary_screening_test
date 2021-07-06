@@ -72,7 +72,7 @@ if __name__ == '__main__':
         is_overlap = False
         t_step = 8
         tokenize_tup = (d_model, is_overlap, t_step)
-        epochs = 500
+        epochs = 250
         batch_size = 128
         num_of_worker = 2
 
@@ -119,51 +119,22 @@ if __name__ == '__main__':
         val_dataset, batch_val = data_loader.creat_dataset(val_path, bsz=1)
         test_dataset, batch_test = data_loader.creat_dataset(test_path, bsz=1)
 
-        # epoch loop
-        for epoch in range(0, epochs):
-            # epoch start time
-            start_epoch_time = time.time()
+        """scalars_dic = {
+            'train loss - epoch': train_epoch_loss,
+            'val loss - epoch': val_epoch_loss,
+        }
+        writer.add_scalars('loss - epoch ', scalars_dic, epoch)
 
-            # train
-            train_epoch_loss = 0
-            train_epoch_loss = run.train(net, op, train_dataset, tokenizer, epoch, batch_train, device)
-            train_epoch_time = time.time()
-
-            # scheduler optimizer
-            scheduler.step()
-
-            # val
-            val_epoch_loss = 0
-            val_epoch_loss = run.val(net, val_dataset, tokenizer, epoch, batch_val, device)
-            val_epoch_time = time.time()
-
-            # time log
-            print('| epoch time {:5.2f}s | train time: {:5.2f}s | valid time {:5.2f}s | '
-                  .format((time.time() - start_epoch_time),
-                          (train_epoch_time - start_epoch_time),
-                          (val_epoch_time - train_epoch_time)))
-            print('-' * 89)
-
-            # add scalars: epoch train loss and epoch val loss
-            scalars_dic = {
-                'train loss - epoch': train_epoch_loss,
-                'val loss - epoch': val_epoch_loss,
-            }
-            writer.add_scalars('loss - epoch ', scalars_dic, epoch)
-
-            # save model every 2 epoch
-            if epoch % 2 == 0:
-                save_name = f'{model_name}_{epoch}_{train_epoch_loss}_{val_epoch_loss}.pt'
-                save_path = os.path.join(model_path, save_name)
-                torch.save({
-                    'epoch': epoch,
-                    'model_state_dict': net.state_dict(),
-                    'optimizer_state_dict': op.state_dict(),
-                    'train_loss': train_epoch_loss,
-                    'val_loss': val_epoch_loss,
-                }, save_path)
-
-        # test
-        run.test(net, test_dataset, tokenizer, batch_test, device)
+        # save model every 2 epoch
+        if epoch % 2 == 0:
+            save_name = f'{model_name}_{epoch}_{train_epoch_loss}_{val_epoch_loss}.pt'
+            save_path = os.path.join(model_path, save_name)
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': net.state_dict(),
+                'optimizer_state_dict': op.state_dict(),
+                'train_loss': train_epoch_loss,
+                'val_loss': val_epoch_loss,
+            }, save_path)"""
 
 exit(0)

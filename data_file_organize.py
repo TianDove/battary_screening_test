@@ -7,6 +7,7 @@ import sys
 import functional
 import pandas as pd
 from tqdm import tqdm
+import file_operation
 
 
 class File_Organizer():
@@ -316,7 +317,7 @@ class File_Organizer():
                                     write_pickle_path = os.path.join(self.output_fold_path
                                                                      + '.\\pickle', self.curr_cell + '.pickle')
                                     if not os.path.exists(write_pickle_path):
-                                        functional.save_dic_as_pickle(write_pickle_path, paras_dic)
+                                        file_operation.save_dic_as_pickle(write_pickle_path, paras_dic)
                                 # Cell tray progress bar
                                 cell_bar.update()
                     else:

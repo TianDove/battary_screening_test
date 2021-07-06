@@ -1,12 +1,14 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
 # Author: Wang, Xiang
-
 import torch
 import math
 import torch.nn as nn
 
+# define Embedding
 
+
+# define Position Encoding
 class PositionalEncoding_Fixed(nn.Module):
     """"""
     def __init__(self, d_model, dropout=0.1, max_len=5000):
@@ -41,7 +43,7 @@ class PositionalEncoding_Learnable(nn.Module):
     def forward(self, X):
         pass
 
-
+# define Encoder
 class Encoder_TransformerEncoder(nn.Module):
     """"""
     def __init__(self, d_model, nhd=8, nly=6, dropout=0.1, hid=2048):
@@ -55,7 +57,7 @@ class Encoder_TransformerEncoder(nn.Module):
         res = self.encoder_lays(X)
         return res
 
-
+# define Decoder
 class Decoder_MLP_Linear(nn.Module):
     """"""
     def __init__(self, d_model, tokenizer):
@@ -93,10 +95,10 @@ class Decoder_Conv_Pooling(nn.Module):
 
     def forward(self, X):
         pass
-
-
+# define Model
 class PE_fixed_EC_transformer_DC_mlp_linear(nn.Module):
     """"""
+
     def __init__(self, d_model, tokenizer, nhd=8, nly=6, dropout=0.1, hid=2048):
         """"""
         self.model_name = self.__class__.__name__
