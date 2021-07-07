@@ -8,6 +8,7 @@ import functional
 import pandas as pd
 from tqdm import tqdm
 import file_operation
+import multiprocessing as mp
 
 
 class File_Organizer():
@@ -188,9 +189,7 @@ class File_Organizer():
         tray_cell_no = alp[times] + str(res + 1)
         return tray_cell_no
 
-
-
-    def file_organize(self, write=False):
+    def file_organize(self, write: bool = False, num_of_worker: int = None):
         """
         2600P-01 文件夹结构：
         2600P-01
@@ -251,7 +250,8 @@ class File_Organizer():
                 for tray in iter(tray_list):
                     tray_name = self.tray_name_adjust(tray)
                     self.curr_tray = tray_name
-                    current_tray_static_data = current_batch_static_data[current_batch_static_data['Tray ID'] == tray_name]
+                    current_tray_static_data = current_batch_static_data[current_batch_static_data['Tray ID']
+                                                                         == tray_name]
                     if current_tray_static_data.shape[0] != self.num_of_cell_in_tray:
                         print('Current Tray Static Data Shape Error.')
                         sys.exit(0)
@@ -269,7 +269,6 @@ class File_Organizer():
                         paras_tray_dic.update({f'{para_name}': current_para_tray_data})
                     if not paras_tray_dic == {}:
                         # all para of a tray will saved into paras_dic
-
                         cell_no = [k for k in range(1, self.num_of_cell_in_tray + 1)]
                         # Cell progress Bar
                         with tqdm(total=self.num_of_cell_in_tray) as cell_bar:
@@ -334,19 +333,13 @@ class File_Organizer():
         err_sq.to_csv('.\\data\\file_err_list.csv')
 
 
-#  test
 if __name__ == '__main__':
-    # raw data path and name
-    m_raw_data_path = '.\\data'
-    m_raw_data_fold_name = '2600P-01'
-    m_file_organizer = File_Organizer(m_raw_data_path, m_raw_data_fold_name)
-    m_file_organizer.file_organize(False)
-    """ err_file = pd.read_csv('.\\data\\file_err_list.csv')
-    err_name = err_file['0']
-    for i in iter(err_name.values):
-        temp_sp_list = i.split('-')
-        cell_no = temp_sp_list[1].split('_')[2]
-        new = m_file_organizer.cell_no_to_tray_cell_no(cell_no)"""
-    sys.exit(0)
+    N_WORKER = 3
+    fold_path = '.\\data'
+    fold_name = '2600P-01'
+    mp.freeze_support()
+    m_file_organizer = File_Organizer(fold_path, fold_name)
+    with mp.Pool(processes=N_WORKER,) as pool:
+        pass
 
 
