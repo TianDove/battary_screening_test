@@ -268,6 +268,7 @@ class FileOrganizer():
         self.is_write = is_write
         self.make_file_dir()
         batch_tray_list = self.get_tray_to_process()
+        func_iter = iter(batch_tray_list)
 
         # output
         in_comp_cells = []
@@ -277,9 +278,9 @@ class FileOrganizer():
         start_time = time.time()
         if self.is_multi_worker:
             with mp.Pool(processes=mp.cpu_count() - 1) as pool:
-                in_comp_cells, err_para_cells = pool.map(self.tray_worker, batch_tray_list)
+                res = pool.map(self.tray_worker, func_iter)
             end_time = time.time()
-            self.log_file_organie(start_time, end_time, in_comp_cells, err_para_cells)
+            self.log_file_organie(start_time, end_time, res)
         else:
             print('Single Processing, Pleas Using :self.file_organize_work_in_batch(), '
                   'with self.is_multi_worker = False.')
@@ -291,33 +292,30 @@ class FileOrganizer():
         self.is_write = is_write
         self.make_file_dir()
         batch_list = self.get_batch_to_process()
-        in_comp_cells = []
-        err_para_cells = []
+
         start_time = time.time()
         # use multiprocess or not
         if self.is_multi_worker:
             with mp.Pool(processes=mp.cpu_count() - 1) as pool:
-                in_comp_cells, err_para_cells = pool.map(self.batch_worker, batch_list)
+                res = pool.map(self.batch_worker, batch_list)
             end_time = time.time()
         else:
+            res = []
             for batch in batch_list:
-                temp_in_comp_cells, temp_err_para_cells = self.batch_worker(batch)
-                in_comp_cells += temp_in_comp_cells
-                err_para_cells += temp_err_para_cells
+                temp_res = self.batch_worker(batch)
+                res.append(temp_res)
             end_time = time.time()
         # log
-        self.log_file_organie(start_time, end_time, in_comp_cells, err_para_cells)
+        self.log_file_organie(start_time, end_time, res)
         print('Logging Finished, All Done.')
         sys.exit(0)
 
-    def log_file_organie(self, start, end, in_comp_cells, err_para_cells):
+    def log_file_organie(self, start, end, res: list):
         """"""
         # logging
         now_time = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         log_file_path = os.path.join(self.out_path, now_time + '_' + 'FileOrganizer_Logging.txt')
-        assert os.path.exists(log_file_path)
         consumed_time = end - start
-        # res = {'Incomplete Cells': in_comp_cells, 'Verification Failed Cells': err_para_cells}
 
         seperator = '-' * 89
         file_operation.write_txt(log_file_path, seperator)
@@ -329,17 +327,19 @@ class FileOrganizer():
         text_data = ' ' * 20 + ' Incomplete Cells List ' + ' ' * 20
         file_operation.write_txt(log_file_path, text_data)
         file_operation.write_txt(log_file_path, seperator)
-        for i in iter(in_comp_cells):
-            text_data = i
-            file_operation.write_txt(log_file_path, text_data)
+        for i in res:
+            if (i != {}) and (i['Incomplete Cells List'] != []):
+                text_data = i['Incomplete Cells List']
+                file_operation.write_txt(log_file_path, text_data)
         file_operation.write_txt(log_file_path, seperator)
 
         text_data = ' ' * 20 + ' Verification Failed Cells ' + ' ' * 20
         file_operation.write_txt(log_file_path, text_data)
         file_operation.write_txt(log_file_path, seperator)
-        for i in iter(err_para_cells):
-            text_data = i
-            file_operation.write_txt(log_file_path, text_data)
+        for i in res:
+            if (i != {}) and (i['Verification Failed Cells'] != []):
+                text_data = i['Verification Failed Cells']
+                file_operation.write_txt(log_file_path, text_data)
         file_operation.write_txt(log_file_path, seperator)
 
     def batch_worker(self, batch: str) -> (list, list):
@@ -426,7 +426,8 @@ class FileOrganizer():
                             file_operation.save_dic_as_pickle(write_pickle_path, paras_dic)
         if self.is_multi_worker:
             print('# {} Processing End, PID: {}'.format(batch, os.getpid()))
-        return in_compelet_cells_list, err_para_cells_list
+        return {'Incomplete Cells List': in_compelet_cells_list,
+                'Verification Failed Cells': err_para_cells_list}
 
     def tray_worker(self, tray_worker_dic: dict) -> (list, list):
         """"""
@@ -505,7 +506,9 @@ class FileOrganizer():
                         file_operation.save_dic_as_pickle(write_pickle_path, paras_dic)
         if self.is_multi_worker:
             print('# {} Processing End, PID: {}'.format(curr_batch + '_' + curr_tray, os.getpid()))
-        return in_compelet_cells_list, err_para_cells_list
+        return {'Incomplete Cells List': in_compelet_cells_list,
+                'Verification Failed Cells': err_para_cells_list}
+
 
 class DataProcessor():
     """"""
@@ -523,4 +526,4 @@ if __name__ == '__main__':
     input_data_path = '.\\data\\2600P-01'
     output_data_path = '.\\data\\2600P-01_DataSet'
     m_file_organizer = FileOrganizer(input_data_path, output_data_path, is_multi_worker=True)
-    m_file_organizer.file_organize_work_in_tray(is_write=False)
+    m_file_organizer.file_organize_work_in_tray(is_write=True)
