@@ -7,6 +7,7 @@ import shutil
 import pandas as pd
 import pickle
 import sys
+import openpyxl
 
 
 def DeleteFile(strFileName):
@@ -90,13 +91,43 @@ def save_dic_as_pickle(target_path, data_dic):
 def load_dic_in_pickle(source_path):
     """读取pickle文件"""
     if os.path.exists(source_path):
+        file_name = os.path.basename(source_path)
+        file_name = os.path.splitext(file_name)[0]
+        dic = {f'{file_name}': {}}
         with open(source_path, 'rb') as f:
-            dic_data = pickle.load(f)
-            return dic_data
+            temp_dic = pickle.load(f)
+            dic[f'{file_name}'].update(temp_dic)
+            return dic
     else:
         print(f'Path Not Exist: {source_path}')
         sys.exit(0)
 
 
+def write_to_xlsx(target_path, data_dic):
+    """"""
+    if not os.path.exists(target_path):
+        with pd.ExcelWriter(target_path) as writer:
+            for name in iter(data_dic.keys()):
+                data_dic[name].to_excel(writer, sheet_name=name)
+    else:
+        print(f'Path Exist: {target_path}')
+        sys.exit(0)
+
+
+def read_xlsx_all_sheet(source_path: str) -> dict:
+    """"""
+    assert os.path.exists(source_path)
+    file_name = os.path.basename(source_path)
+    file_name = os.path.splitext(file_name)[0]
+    wb = openpyxl.load_workbook(source_path)
+    sheets = wb.sheetnames
+    dic = {f'{file_name}': {}}
+    for sheet in sheets:
+        temp_sheet_df = pd.read_excel(source_path, sheet_name=sheet)
+        temp_dic = {f'{sheet}': temp_sheet_df}
+        dic[f'{file_name}'].update(temp_dic)
+    return dic
+
+
 if __name__ == '__main__':
-    pass
+    sys.exit(0)

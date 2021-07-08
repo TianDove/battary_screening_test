@@ -244,46 +244,5 @@ def tokenizer(t_len: int = 32, is_overlap: bool = True, step: int = 16) -> Funct
 
 
 if __name__ == '__main__':
-    import data_loader
-    from sklearn.pipeline import make_pipeline
-    from sklearn.preprocessing import Normalizer, StandardScaler
-
-    # dataset name
-    dataset_name = 'train'
-    dataset_path = '.\\data\\2600P-01_DataSet\\dataset\\' + dataset_name
-
-    # tokenizer tup
-    t_len = 32
-    is_overlap = True
-    step = 16
-    token_tup = (t_len, is_overlap, step)
-    batch_size = 64
-
-    # tokenizer
-    # tokenizer = Tokenizer(token_tup)
-
-    # pre-process
-    trans_tup = (
-        Normalizer,
-        StandardScaler,
-        tokenizer
-    )
-    trans_para = (
-        {'norm': 'l2', 'copy': True},
-        {'copy': True, 'with_mean': True, 'with_std': True},
-        {'t_len': 32, 'is_overlap': False, 'step': 16}
-    )
-
-    # creat dataset
-    dataset, num_of_batch = data_loader.creat_dataset(dataset_path,
-                                                      bsz=batch_size,
-                                                      is_shuffle=True,
-                                                      num_of_worker=0,
-                                                      transform=trans_tup,
-                                                      trans_para=trans_para)
-    # batch loop
-    for batch_index, raw_data in enumerate(dataset):
-        temp_data = raw_data['data']
-        temp_label = raw_data['label']
-        print('')
+    pass
 
