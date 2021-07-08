@@ -203,12 +203,22 @@ class FileOrganizer():
                 temp_batch_list.append(batch)
         return temp_batch_list
 
-    def get_tray_to_process(self) -> list:
+    def get_tray_to_process(self, is_balance=False) -> list:
         """
         static_df: pd.DataFrame, batch: str, tray: str, tray_path: str
         """
         batch_list = self.get_batch_to_process()
         temp_tray_list = []
+
+        if is_balance:
+            num_tray_per_batch = []
+            tray_index_per_batch = {}
+            for batch in iter(batch_list):
+                current_batch_tray_path = os.path.join(self.dynamic_data_path, batch)
+                tray_list = os.listdir(current_batch_tray_path)
+                num_tray_per_batch.append(len(tray_list))
+                tray_index_per_batch.update({f'{batch}': tray_list})
+
         for batch in iter(batch_list):
             curr_batch = batch
             current_batch_tray_path = os.path.join(self.dynamic_data_path, batch)
@@ -272,7 +282,7 @@ class FileOrganizer():
     def file_organize_work_in_tray(self, is_write: bool = True):
         self.is_write = is_write
         self.make_file_dir()
-        batch_tray_list = self.get_tray_to_process()
+        batch_tray_list = self.get_tray_to_process(is_balance=True)
         func_iter = iter(batch_tray_list)
 
         # output
@@ -289,7 +299,6 @@ class FileOrganizer():
         else:
             print('Single Processing, Pleas Using :self.file_organize_work_in_batch(), '
                   'with self.is_multi_worker = False.')
-        sys.exit(0)
 
 
     def file_organize_work_in_batch(self, is_write: bool = True):
@@ -313,7 +322,6 @@ class FileOrganizer():
         # log
         self.log_file_organie(start_time, end_time, res)
         print('Logging Finished, All Done.')
-        sys.exit(0)
 
     def log_file_organie(self, start, end, res: list):
         """"""
@@ -702,6 +710,7 @@ class DataProcessor():
             out_dic.update(temp)
         return out_dic
 
+    # method for charge#1 voltage curve
     def ch1_data_clean_and_interpolation(self, data_dic):
         """"""
         #
@@ -764,19 +773,49 @@ class DataProcessor():
         col_list = list(align_df.columns)
 
         #
-        with tqdm(total=len(col_list)) as w_bar:
-            w_bar.set_description('Charge #1 Data Writing....')
-            for t, col in enumerate(iter(col_list)):
-                w_bar.update()
-                str_split = col.split('_')
-                cell_name = str_split[0] + '_' + str_split[1] + '_' + str_split[2]
-                static_data = data_dic[cell_name]['Static'].values.squeeze(axis=1)
-                dynamic_data = align_df[col].values
-                sample_with_label = np.concatenate([dynamic_data, static_data])
-                file_name = cell_name + '.npy'
-                save_path = os.path.join(self.npy_file_path, file_name)
-                np.save(save_path, sample_with_label)
-        return 0
+        if self.is_multi_worker:
+            mp_list = []
+            for col in col_list:
+                temp_tup = (col, data_dic, align_df, self.npy_file_path)
+                mp_list.append(temp_tup)
+
+            with mp.Pool(processes=self.num_processes) as pool:
+                pool.starmap(self.ch1_save_npy, mp_list)
+        else:
+            with tqdm(total=len(col_list)) as w_bar:
+                w_bar.set_description('Charge #1 Data Writing....')
+                for t, col in enumerate(iter(col_list)):
+                    w_bar.update()
+                    str_split = col.split('_')
+                    cell_name = str_split[0] + '_' + str_split[1] + '_' + str_split[2]
+                    static_data = data_dic[cell_name]['Static'].values.squeeze(axis=1)
+                    dynamic_data = align_df[col].values
+                    sample_with_label = np.concatenate([dynamic_data, static_data])
+                    file_name = cell_name + '.npy'
+                    save_path = os.path.join(self.npy_file_path, file_name)
+                    np.save(save_path, sample_with_label)
+
+    @staticmethod
+    def ch1_normalization():
+        """"""
+        pass
+
+    @staticmethod
+    def ch1_standardization():
+        """"""
+        pass
+
+    @staticmethod
+    def ch1_save_npy(col: str, data_dic: dict, align_df: pd.DataFrame, tgt_fold_path: str):
+        """"""
+        str_split = col.split('_')
+        cell_name = str_split[0] + '_' + str_split[1] + '_' + str_split[2]
+        static_data = data_dic[cell_name]['Static'].values.squeeze(axis=1)
+        dynamic_data = align_df[col].values
+        sample_with_label = np.concatenate([dynamic_data, static_data])
+        file_name = cell_name + '.npy'
+        save_path = os.path.join(tgt_fold_path, file_name)
+        np.save(save_path, sample_with_label)
 
 
 class DataSetCreator(Dataset):
@@ -794,11 +833,6 @@ class DataSetCreator(Dataset):
             assert len(transform) == len(trans_para)
             self.transform = transform
             self.trans_para = trans_para
-            # init transform
-            trans_list = []
-            for tran_i, para_i in zip(iter(self.transform), iter(self.trans_para)):
-                temp_trans = tran_i(**(para_i if para_i else {}))
-                trans_list.append(temp_trans)
 
         # join path
         self.file_path_list = []
@@ -814,7 +848,7 @@ class DataSetCreator(Dataset):
             temp_data = data[0:-1]
             temp_label = data[-1]
             for tran_i, para_i in zip(iter(self.transform), iter(self.trans_para)):
-                temp_data = tran_i(**(para_i if para_i else {}))
+                temp_data = tran_i(temp_data, **(para_i if para_i else {}))
         return {'data': temp_data,
                 'label': temp_label}
 
@@ -842,8 +876,8 @@ if __name__ == '__main__':
     mp.freeze_support()
     # input_data_path = '.\\data\\2600P-01'
     # output_data_path = '.\\data\\2600P-01_DataSet'
-    # m_file_organizer = FileOrganizer(input_data_path, output_data_path, is_multi_worker=True)
-    # m_file_organizer.file_organize_work_in_tray(is_write=True)
+    # m_file_organizer = FileOrganizer(input_data_path, output_data_path, is_multi_worker=False)
+    # m_file_organizer.file_organize_work_in_tray(is_write=False)
 
     organized_file_path = '.\\data\\2600P-01_DataSet\\organized_data'
     data_set_path = '.\\data\\2600P-01_DataSet\\data_set'
@@ -859,6 +893,6 @@ if __name__ == '__main__':
                                      data_set_path,
                                      param_mode_dic,
                                      file_type='pickle',
-                                     is_multi_worker=False)
+                                     is_multi_worker=True)
     m_data_processor.data_processing()
     sys.exit(0)
