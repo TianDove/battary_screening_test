@@ -14,6 +14,7 @@ import multiprocessing as mp
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+from sklearn.preprocessing import StandardScaler
 from torch.utils.data import Dataset, DataLoader
 
 # import self define module
@@ -552,6 +553,8 @@ class DataProcessor():
         self.npy_file_path = os.path.join(self.organized_file_path + '\\npy')
         self.load_func = None
         self.used_key = []
+        self.standardizer = None
+        self.normalizer = None
 
     def cell_data_selection(self, data_dic: dict) -> dict:
         """"""
@@ -597,7 +600,7 @@ class DataProcessor():
     def data_processing(self):
         """"""
         data = self.data_load_select_convert()
-        self.ch1_data_clean_and_interpolation(data)  # specified for ch1_formocv
+        self.ch1_data_clean_and_interpolation(data, is_standardize=True)  # specified for ch1_formocv
         self.data_divide()
 
     def data_load_select_convert(self):
@@ -711,7 +714,7 @@ class DataProcessor():
         return out_dic
 
     # method for charge#1 voltage curve
-    def ch1_data_clean_and_interpolation(self, data_dic):
+    def ch1_data_clean_and_interpolation(self, data_dic: dict, is_standardize=False):
         """"""
         #
         para_name = 'Charge #1'
@@ -772,6 +775,15 @@ class DataProcessor():
         align_df = align_df.drop(index_to_col_list, axis=1)
         col_list = list(align_df.columns)
 
+        # standardization
+        if is_standardize:
+            value_T = align_df.values.transpose()
+            self.standardizer = StandardScaler(copy=False)
+            self.standardizer.fit(value_T)
+            self.standardizer.transform(value_T).transpose()
+            temp_dic = {'standardizer': self.standardizer}
+            file_operation.save_dic_as_pickle(self.npy_file_path + '\\standardizer.pickle', temp_dic)
+
         #
         if self.is_multi_worker:
             mp_list = []
@@ -795,15 +807,24 @@ class DataProcessor():
                     save_path = os.path.join(self.npy_file_path, file_name)
                     np.save(save_path, sample_with_label)
 
-    @staticmethod
-    def ch1_normalization():
+    def ch1_normalization(self, df: pd.DataFrame):
+        """"""
+        value_T = df.values.transpose()
+        self.standardizer = StandardScaler(copy=False)
+        self.standardizer.fit(value_T)
+        self.standardizer.transform(value_T).transpose()
+
+    def ch1_standardization(self, df: pd.DataFrame):
         """"""
         pass
 
-    @staticmethod
-    def ch1_standardization():
-        """"""
-        pass
+    def get_standardizer(self):
+        assert self.standardizer
+        return self.standardizer
+
+    def get_normalizer(self):
+        assert self.normalizer
+        return self.normalizer
 
     @staticmethod
     def ch1_save_npy(col: str, data_dic: dict, align_df: pd.DataFrame, tgt_fold_path: str):
@@ -874,10 +895,10 @@ class DataSetCreator(Dataset):
 # Module Test
 if __name__ == '__main__':
     mp.freeze_support()
-    # input_data_path = '.\\data\\2600P-01'
-    # output_data_path = '.\\data\\2600P-01_DataSet'
-    # m_file_organizer = FileOrganizer(input_data_path, output_data_path, is_multi_worker=False)
-    # m_file_organizer.file_organize_work_in_tray(is_write=False)
+    """input_data_path = '.\\data\\2600P-01'
+    output_data_path = '.\\data\\2600P-01_DataSet'
+    m_file_organizer = FileOrganizer(input_data_path, output_data_path, is_multi_worker=False)
+    m_file_organizer.file_organize_work_in_tray(is_write=False)"""
 
     organized_file_path = '.\\data\\2600P-01_DataSet\\organized_data'
     data_set_path = '.\\data\\2600P-01_DataSet\\data_set'
@@ -893,6 +914,6 @@ if __name__ == '__main__':
                                      data_set_path,
                                      param_mode_dic,
                                      file_type='pickle',
-                                     is_multi_worker=True)
+                                     is_multi_worker=False)
     m_data_processor.data_processing()
     sys.exit(0)
