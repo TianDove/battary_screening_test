@@ -847,6 +847,13 @@ class DataSetCreator(Dataset):
     def __init__(self, path: str, transform: tuple = None, trans_para: tuple = None) -> None:
         self.file_path = path
         self.list_files = os.listdir(self.file_path)
+        temp_all_npy_list = []
+        for file in self.list_files:
+            end_fix = os.path.splitext(file)[1]
+            if '.npy' == end_fix:
+                temp_all_npy_list.append(file)
+        self.list_files = temp_all_npy_list
+
         self.num_of_samples = len(self.list_files)
 
         #

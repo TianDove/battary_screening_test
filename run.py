@@ -102,7 +102,7 @@ class Run():
                 scalar_loss = self.loss(out, input_label)
                 self.batch_train_loss = scalar_loss.detach().item()
                 self.epoch_train_loss += scalar_loss.detach().item()
-                out.backward()
+                scalar_loss.backward()
                 self.optimizer.step()
                 if self.scheduler is not None:
                     self.scheduler.step()

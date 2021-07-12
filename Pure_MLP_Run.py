@@ -7,7 +7,7 @@ from sys import exit
 import datetime
 import os
 import torch
-import torch.optim as optim
+import torch.optim
 import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
 
@@ -18,8 +18,9 @@ import data_pre_with_mp
 import run
 
 # constant
-USE_GPU = True
-DEBUG = False
+USE_GPU = False
+DEBUG = True
+CH1_VOLTAGE_LEN = 161
 CRITERION = nn.MSELoss()
 
 if __name__ == '__main__':
@@ -29,8 +30,8 @@ if __name__ == '__main__':
     n_epochs = 256
     batch_size = 256
     data_file_path = 'D:\\workspace\\PycharmProjects\\battery_dataset'
-    file_organize_type = ('2600P-01_DataSet_Balance', '2600P-01_DataSet_UnBalance')
-    data_process_type = ('npy_standardized', 'npy_unstandardized')
+    file_organize_type = ('2600P-01_DataSet_Balance', )  # ('2600P-01_DataSet_Balance', '2600P-01_DataSet_UnBalance')
+    data_process_type = ('npy_standardized', )  # ('npy_standardized', 'npy_unstandardized')
 
     # data set profile
     dataset_profile_list = []
@@ -76,7 +77,7 @@ if __name__ == '__main__':
         device = 'cpu'
 
     model_init_para = {
-        'in_dim': 161
+        'in_dim': CH1_VOLTAGE_LEN
     }
     # init model
     model = model_define.PureMLP(**model_init_para)
@@ -93,10 +94,11 @@ if __name__ == '__main__':
     type_optimizer = 'SGD'  # SGD or Adam
     init_lr = 0.001
     if type_optimizer == 'SGD':
-        optimizer = optim.SGD(model.parameters(), lr=init_lr, momentum=0.9),
+        optimizer = torch.optim.SGD(model.parameters(), lr=init_lr, momentum=0.9),
+        optimizer = optimizer[0]
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.9)
     elif type_optimizer == 'Adam':
-        optimizer = optim.Adam(model.parameters(), lr=init_lr, betas=(0.9, 0.998), eps=1e-09)
+        optimizer = torch.optim.Adam(model.parameters(), lr=init_lr, betas=(0.9, 0.998), eps=1e-09)
         scheduler = None
     else:
         raise ValueError('Optimizer Type Error.')
@@ -111,7 +113,7 @@ if __name__ == '__main__':
     log_dir_base = 'D:\\workspace\\PycharmProjects\\model_run'
 
     if DEBUG:
-        log_dir = log_dir_base + '\\DEBUG\\' + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        log_dir = log_dir_base + '\\DEBUG\\' + f'\\{model_name}\\' + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     else:
         log_dir = log_dir_base + f'\\{model_name}\\' + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
 
@@ -124,15 +126,22 @@ if __name__ == '__main__':
 
         # dataset loop
         for curr_dataset in dataset_profile_list:
+
             curr_dataset_name = curr_dataset['dataset_type']
             curr_dataset_dic = {
                 'train_data_set': curr_dataset['train_data_set'][0],
                 'num_of_train_batch': curr_dataset['train_data_set'][1],
                 'val_data_set': curr_dataset['val_data_set'][0],
                 'num_of_val_batch': curr_dataset['val_data_set'][1],
-                'test_data_set':curr_dataset['test_data_set'][0],
+                'test_data_set': curr_dataset['test_data_set'][0],
                 'num_of_test_batch': curr_dataset['test_data_set'][1]
             }
+            #
+            curr_dataset_model_path = os.path.join(model_path, curr_dataset_name)
+            if not os.path.exists(curr_dataset_model_path): 
+                os.mkdir(curr_dataset_model_path)
+
+            #
             m_run = run.Run(model_dict['model_name'],
                             model_dict['model'],
                             op_dict['optimizer'],
@@ -142,6 +151,6 @@ if __name__ == '__main__':
                             device=model_dict['device'],
                             writer=writer)
             m_run.train_model(n_epochs)
+            # test
             m_run.test_model()
-        # test
         exit(0)
