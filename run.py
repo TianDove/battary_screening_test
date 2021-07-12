@@ -2,6 +2,7 @@
 # -*- coding:utf-8 -*-
 # Author: Wang, Xiang
 import time
+import os
 import torch
 import torch.nn as nn
 import torch.optim
@@ -21,7 +22,8 @@ class Run():
     """
 
     """
-    def __int__(self,
+    def __init__(self,
+                model_name: str,
                 model: nn.Module,
                 optimizer: torch.optim,
                 loss: nn.Module,
@@ -33,8 +35,9 @@ class Run():
         dataset_dic:dictionary contain train, validation and test data set,
                     like {'train_data_set':..., 'num_of_train_batch':...,
                           'val_data_set':...,'num_of_val_batch'...,
-                          'test_data_set':..., 'num_of_train_batch':...}
+                          'test_data_set':..., 'num_of_test_batch':...}
         """
+        self.model_name = model_name
         self.model = model
         self.optimizer = optimizer
         self.dataset_dic = dataset_dic
@@ -73,7 +76,6 @@ class Run():
         """
 
         """
-
         # epoch loop
         for epoch in range(num_epochs):
             self.curr_epoch = epoch  # log current epoch index
@@ -154,6 +156,7 @@ class Run():
         self.test_loss /= self.dataset_dic['num_of_test_batch']
 
     def log(self, log_file_path, mode: str = 'train') -> None:
+        """"""
         str_data = ''
         separator = ''
         if mode == 'train':
@@ -190,6 +193,33 @@ class Run():
             file_operation.write_txt(log_file_path, separator)
         else:
             raise ValueError('String Data Container Empty Error.')
+
+    def save_model(self, path: str) -> None:
+        """"""
+        assert os.path.exists(path)
+        save_name = f'{self.model_name}_{self.curr_epoch}.pth'
+        save_path = os.path.join(path, save_name)
+        torch.save({
+                'model_name': self.model_name,
+                'epoch': self.curr_epoch,
+                'model': self.model,
+                'optimizer': self.optimizer,
+                'scheduler': self.scheduler,
+                'train_loss': self.epoch_train_loss,
+                'val_loss': self.epoch_val_loss,
+            }, save_path)
+
+    def load_model(self, path: str) -> None:
+        """"""
+        assert os.path.exists(path)
+        temp_dict = torch.load(path)
+        self.model_name = temp_dict['model_name']
+        self.curr_epoch = temp_dict['epoch']
+        self.model = temp_dict['model']
+        self.optimizer = temp_dict['optimizer']
+        self.scheduler = temp_dict['scheduler']
+        self.epoch_train_loss = temp_dict['train_loss']
+        self.epoch_val_loss = temp_dict['val_loss']
 
 
 if __name__ == '__main__':

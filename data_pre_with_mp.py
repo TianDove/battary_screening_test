@@ -654,9 +654,11 @@ class DataProcessor():
         converted_data = self.data_convert(selected_data)
         return converted_data
 
-    def data_divide(self, ratio=0.2):
+    @staticmethod
+    def data_divide(src_path: str, dst_path: str, ratio: float = 0.2, is_multi_worker: bool = True):
         """"""
-        file_list = os.listdir(self.npy_file_path)
+        file_list = os.listdir(src_path)
+        assert file_list
         selected_samples = file_list
         num_of_samples = len(selected_samples)
         random.shuffle(selected_samples)
@@ -678,10 +680,10 @@ class DataProcessor():
             'test': test_list
         }
         # List of Tuple[(src, dst), ...]
-        file_copy_list = self.get_copy_src_dst_list(divide_dic)
+        file_copy_list = DataProcessor.get_copy_src_dst_list(src_path, dst_path, divide_dic)
         print('Diving Start.')
-        if self.is_multi_worker:
-            with mp.Pool(processes=self.num_processes) as pool:
+        if is_multi_worker:
+            with mp.Pool(processes=mp.cpu_count() - 1) as pool:
                 pool.starmap(shutil.copy, file_copy_list)
         else:
             with tqdm(total=len(file_copy_list)) as bar:
@@ -691,12 +693,13 @@ class DataProcessor():
                     shutil.copy(j[0], j[1])
         print('Diving End.')
 
-    def get_copy_src_dst_list(self, div_dic: dict) -> list:
+    @staticmethod
+    def get_copy_src_dst_list(src_path: str, dst_path: str, div_dic: dict) -> list:
         """"""
         out = []
         for key in iter(div_dic.keys()):
-            temp_src_fold = self.npy_file_path
-            temp_dst_fold = os.path.join(self.data_set_path, key)
+            temp_src_fold = src_path
+            temp_dst_fold = os.path.join(dst_path, key)
             for file in iter(div_dic[key]):
                 temp_src_file_path = os.path.join(temp_src_fold, file)
                 temp_dst_file_path = temp_dst_fold
@@ -895,12 +898,15 @@ class DataSetCreator(Dataset):
 # Module Test
 if __name__ == '__main__':
     mp.freeze_support()
+
+    # File Organize
     """input_data_path = '.\\data\\2600P-01'
     output_data_path = '.\\data\\2600P-01_DataSet'
     m_file_organizer = FileOrganizer(input_data_path, output_data_path, is_multi_worker=False)
     m_file_organizer.file_organize_work_in_tray(is_write=False)"""
 
-    organized_file_path = '.\\data\\2600P-01_DataSet\\organized_data'
+    # Data Process
+    """organized_file_path = '.\\data\\2600P-01_DataSet\\organized_data'
     data_set_path = '.\\data\\2600P-01_DataSet\\data_set'
     param_mode_dic = {
         'Static': ['Form-OCV #1', ],
@@ -916,4 +922,5 @@ if __name__ == '__main__':
                                      file_type='pickle',
                                      is_multi_worker=False)
     m_data_processor.data_processing()
+    m_data_processor.data_divide()"""
     sys.exit(0)

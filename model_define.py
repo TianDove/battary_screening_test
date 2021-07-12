@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
 # Author: Wang, Xiang
+import sys
+
 import torch
 import math
 import torch.nn as nn
 
-# define Embedding
+# define Embedding(Tokenize)
 
 
 # define Position Encoding
@@ -150,28 +152,30 @@ class PE_fixed_EC_transformer_DC_mlp_linear_with_Resconnection(nn.Module):
         return res
 
 
-class PE_fixed_PureMLP(nn.Module):
+class PureMLP(nn.Module):
     """"""
 
-    def __init__(self, d_model):
+    def __init__(self, in_dim: int = None) -> None:
         """"""
         self.model_name = self.__class__.__name__
-        super(PE_fixed_PureMLP, self).__init__()
+        super(PureMLP, self).__init__()
         linear = nn.Linear
-        relu = nn.ReLU()
+        activ = nn.Sigmoid
         # model define
-        self.hidden1 = nn.Sequential(linear(d_model, d_model * 2), relu)
-        self.hidden2 = nn.Sequential(linear(d_model * 2, d_model), relu)
-        self.hidden3 = nn.Sequential(linear(d_model, d_model // 2), relu)
-        self.linear1 = linear(d_model // 2, 1)
+        self.hidden1 = nn.Sequential(linear(in_dim, in_dim // 2), activ())
+        self.hidden2 = nn.Sequential(linear(in_dim // 2, 1), activ())
 
-    def forward(self, X):
+    def forward(self, x: torch.tensor) -> None:
         """"""
-        res = self.hidden1(X)
+        res = self.hidden1(x)
         res = self.hidden2(res)
-        res = self.hidden3(res)
-        res = self.linear1(res)
         return res
+
+    @classmethod
+    def init_model(cls, init_dic: dict):
+        """"""
+        model = cls(**init_dic)
+        return model
 
 
 if __name__ == '__main__':
