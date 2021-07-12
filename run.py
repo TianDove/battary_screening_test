@@ -24,6 +24,7 @@ class Run():
     """
     def __init__(self,
                 model_name: str,
+                model_save_path: str,
                 model: nn.Module,
                 optimizer: torch.optim,
                 loss: nn.Module,
@@ -38,6 +39,7 @@ class Run():
                           'test_data_set':..., 'num_of_test_batch':...}
         """
         self.model_name = model_name
+        self.model_save_path = model_save_path
         self.model = model
         self.optimizer = optimizer
         self.dataset_dic = dataset_dic
@@ -106,10 +108,15 @@ class Run():
                 self.optimizer.step()
                 if self.scheduler is not None:
                     self.scheduler.step()
+                # log training
+                self.log(self.model_save_path, mode='train')
+
                 self.record_time_dic['train_batch_end_time'] = time.time()  # log training batch end time
             self.record_time_dic['train_end_time'] = time.time()  # log training end time
             # calculate average train loss of epoch
             self.epoch_train_loss /= self.dataset_dic['num_of_train_batch']
+
+
 
             # setup validation
             self.model.eval()
@@ -130,6 +137,11 @@ class Run():
             self.record_time_dic['epoch_end_time'] = time.time()  # log epoch end time
             # calculate average valid loss of epoch
             self.epoch_val_loss /= self.dataset_dic['num_of_val_batch']
+            # log val
+            self.log(self.model_save_path, mode='val')
+
+            # save model after each epoch
+            self.save_model(self.model_save_path)
 
     def test_model(self) -> None:
         """
@@ -154,8 +166,10 @@ class Run():
         self.record_time_dic['test_end_time'] = time.time()  # log test end time
         # calculate average test loss of epoch
         self.test_loss /= self.dataset_dic['num_of_test_batch']
+        # log test
+        self.log(self.model_save_path, mode='test')
 
-    def log(self, log_file_path, mode: str = 'train') -> None:
+    def log(self, path, mode: str = 'train', is_print: bool = True) -> None:
         """"""
         str_data = ''
         separator = ''
@@ -164,7 +178,7 @@ class Run():
             separator = '-' * 89
             str_data = '| Epoch {:3d} | {:5d}/{:5d} batches | lr {:10.9f} | ms/batch {:5.2f} | Loss {:10.9f} |'.format(
                     self.curr_epoch,
-                    self.curr_batch, self.dataset_dic['num_of_train_batch'] - 1,
+                    self.curr_batch, self.dataset_dic['num_of_train_batch'],
                     self.optimizer.param_groups[0]['lr'],
                     self.record_time_dic['train_batch_end_time'] - self.record_time_dic['train_batch_start_time'],
                     self.batch_train_loss)
@@ -188,19 +202,27 @@ class Run():
 
         # write to file
         if str_data != '':
+            log_file_path = os.path.join(path, f'{self.model_name}_logging.txt')
             file_operation.write_txt(log_file_path, separator)
             file_operation.write_txt(log_file_path, str_data)
             file_operation.write_txt(log_file_path, separator)
+            # print
+            if is_print:
+                print(separator)
+                print(str_data)
+                print(separator)
         else:
             raise ValueError('String Data Container Empty Error.')
 
     def save_model(self, path: str) -> None:
         """"""
         assert os.path.exists(path)
+        dataset_type = os.path.basename(path)
         save_name = f'{self.model_name}_{self.curr_epoch}.pth'
         save_path = os.path.join(path, save_name)
         torch.save({
                 'model_name': self.model_name,
+                'dataset_type': dataset_type,
                 'epoch': self.curr_epoch,
                 'model': self.model,
                 'optimizer': self.optimizer,

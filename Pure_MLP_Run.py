@@ -96,7 +96,7 @@ if __name__ == '__main__':
     if type_optimizer == 'SGD':
         optimizer = torch.optim.SGD(model.parameters(), lr=init_lr, momentum=0.9),
         optimizer = optimizer[0]
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.9)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.9)
     elif type_optimizer == 'Adam':
         optimizer = torch.optim.Adam(model.parameters(), lr=init_lr, betas=(0.9, 0.998), eps=1e-09)
         scheduler = None
@@ -143,6 +143,7 @@ if __name__ == '__main__':
 
             #
             m_run = run.Run(model_dict['model_name'],
+                            curr_dataset_model_path,
                             model_dict['model'],
                             op_dict['optimizer'],
                             CRITERION,
@@ -150,7 +151,7 @@ if __name__ == '__main__':
                             scheduler=op_dict['scheduler'],
                             device=model_dict['device'],
                             writer=writer)
-            m_run.train_model(n_epochs)
+            # m_run.train_model(n_epochs)
             # test
             m_run.test_model()
         exit(0)
